@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Alignment, Font
+import xlsxwriter
 from math import pi
 from docx import Document
 from docxtpl import DocxTemplate
@@ -246,7 +247,7 @@ def pipelines_parse():
     # Парсим типы
     types_dict = find_prokladka(my_df)
     # Собираем колонки с типами
-    ground_type_column, pipeline_column, code_column, temperature, town = build_column_types(
+    ground_type_column, pipeline_column, code_column, temperature, system = build_column_types(
         types_dict, len(my_df)
     )
     my_df.insert(0, "Тип прокладки", ground_type_column)
@@ -254,7 +255,7 @@ def pipelines_parse():
     my_df = my_df.drop("Код KKS", axis=1)
     my_df.insert(2, "Код KKS", code_column)
     my_df.insert(3, "Температура", temperature)
-    my_df.insert(4, "Наименование системы", town)
+    my_df.insert(4, "Система", system)
 
     # Выкидываем лишнее
     my_df = my_df.loc[my_df["Примечание"].str.contains("строительная")]
@@ -283,7 +284,9 @@ def pipelines_parse():
     pipe_parsed.rename(columns={'Наименование и техническая   характеристика\n\n': 'Наименование и техническая характеристика', 'Длина': 'Количество'}, inplace=True)
     #pipe_parsed.to_excel("pipe_parsed.xlsx")
     return pipe_parsed
+
 pipe_parsed = pipelines_parse()
+
 def parse_note(row):
     if "подземная" in row["Примечание"].lower():
         return "подземная"
@@ -318,11 +321,6 @@ def parse_armatura():
 
     )
 
-    # armatura["Температура"] = re.match(".*t=(.*) °[С,C].*",
-    #     value["Наименование и техническая   характеристика\n\n"]).group(1)
-
-
-
 
     armatura["Тип прокладки"] = armatura.apply(parse_note, axis=1)
 
@@ -339,8 +337,34 @@ def parse_armatura():
     armatura.rename(
         columns={'Наименование и техническая   характеристика': 'Наименование и техническая характеристика'},
         inplace=True)
-    #armatura.to_excel("armatura_parsed.xlsx", index=False)
 
+    #Для того, чтобы получить корректное значение температруы для арматуры - не парсим это значение из спецификации,
+    # а передаем "в наследство" от трубы. Чтобы реализовать это - создаем маленький датафрейм, где всего
+    # 2 столбца - Код KKS, температура (повторы выкинуты)- это срез из распарсенного экселя труб. И по соотвествию
+    # системы проставляем  #температуру для арматуры.
+    armatura["Температура"] = np.nan
+    armatura["Система"] = np.nan
+    pipe_parsed_slice = pd.DataFrame(data=pipe_parsed['Код KKS'])
+    pipe_parsed_slice.insert(1, "Температура", pipe_parsed['Температура'])
+    pipe_parsed_slice.insert(2, "Система", pipe_parsed['Система'])
+    pipe_parsed_slice = pipe_parsed_slice.drop_duplicates()
+    #pipe_parsed_slice.to_excel("pipe_parsed_slice.xlsx", index=False)
+    j = 0
+    for i in range(len(armatura["Температура"])):
+        if armatura["Код KKS"][i] == pipe_parsed_slice["Код KKS"][j]:
+            armatura["Температура"][i] = pipe_parsed_slice["Температура"][j]
+            armatura["Система"][i] = pipe_parsed_slice["Система"][j]
+        else:
+            j += 1
+            armatura["Температура"][i] = pipe_parsed_slice["Температура"][j]
+            armatura["Система"][i] = pipe_parsed_slice["Система"][j]
+
+
+    #pipe_parsed_slice = pd.DataFrame(data=pipe_parsed['Код KKS'])
+
+
+
+    #armatura.to_excel("armatura_parsed.xlsx", index=False)
     return armatura
 
 armatura_parsed = parse_armatura()
@@ -410,6 +434,7 @@ def armatura_fasteners():
     }
     armatura_fasteners = pd.DataFrame(armatura_fasteners_data)
     return armatura_fasteners
+
 armatura_fasteners = armatura_fasteners()
 # не забыть пересчитать Лак БТ-7 в м2, формула такая: массу ленты 0,7х20/5,495, лак используется только для подземной прокладки(видимо красим ленту)
 ### расчет изоляции
@@ -756,7 +781,7 @@ valves_insulation['mati_2m100_60mm * Количество'] = valves_insulation[
 valves_insulation['steel_0_8mm * Количество'] = valves_insulation["steel_0_8mm"] * valves_insulation["Количество"]
 valves_insulation['steel_0_8mm * Количество'] = valves_insulation["steel_0_8mm * Количество"].round(3)
 valves_insulation = (valves_insulation.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр' ], ascending=[True, True, False])).reset_index()
-#valves_insulation.to_excel("valves.xlsx", index=False)
+valves_insulation.to_excel("valves.xlsx", index=False)
 
 ### Подготовка датафрейма для выводов
 
@@ -777,6 +802,7 @@ mpd_pipeline_with_insulation.insert(13, "Сталь 0.8мм", pipeline_with_insu
 mpd_pipeline_with_insulation.insert(14, "Покрытие защ.Т-23", pipeline_with_insulation["protective_cover_T_23"])
 mpd_pipeline_with_insulation.insert(15, "δк", pipeline_with_insulation["δк"])
 mpd_pipeline_with_insulation.insert(16, "Температура", pipeline_with_insulation["Температура"])
+mpd_pipeline_with_insulation.insert(17, "Система", pipeline_with_insulation["Система"])
 mpd_pipeline_with_insulation = (mpd_pipeline_with_insulation.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
 mpd_valves_insulation = pd.DataFrame(data = valves_insulation['Код KKS'])
 mpd_valves_insulation.insert(1,"Диаметр", valves_insulation['Диаметр'])
@@ -788,8 +814,10 @@ mpd_valves_insulation.insert(5,"Маты 2М-100 60мм", valves_insulation["mat
 mpd_valves_insulation.insert(6,"Маты 2М-100 40мм", valves_insulation["mati_2m100_40mm"])
 mpd_valves_insulation.insert(7,"Сталь 0.8мм", valves_insulation["steel_0_8mm"])
 mpd_valves_insulation.insert(8,"δк", valves_insulation["δк"])
+mpd_valves_insulation.insert(9,"Температура",  armatura_parsed["Температура"])
+mpd_valves_insulation.insert(10,"Система",  armatura_parsed["Система"])
 mpd = pd.concat([mpd_pipeline_with_insulation, mpd_valves_insulation], ignore_index=True)
-mpd = (mpd.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр' ], ascending=[True, True, False])).reset_index()
+mpd = (mpd.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
 #mpd = (mpd.sort_values(by=['Тип прокладки'], ascending=[True])).reset_index()
 del mpd['index']
 
@@ -838,22 +866,26 @@ def mpd_write():
     column_k = sheet['K']
     column_l = sheet['L']
     column_m = sheet['M']
-    column_a[k].value = mpd['Код KKS'][0] + ' ' +mpd['Тип прокладки'][0] + ' прокладка'
-    column_a[k].alignment = Alignment(horizontal="center")
+    column_a[k].value = mpd['Код KKS'][0] + ' ' + mpd['Тип прокладки'][0] + ' прокладка''\n'+ mpd['Система'][0]
+    column_a[k].alignment = Alignment(wrapText=True, horizontal="center")
+    column_a[k].font = Font(name='Times New Roman', size=18, bold=True)
+    sheet.row_dimensions[k+1].height = 50
     previous_KKS = mpd['Код KKS'][0]
     previous_ground_type = mpd['Тип прокладки'][0]
     while i <= l:
         if j > 0 and previous_KKS != mpd['Код KKS'][j]:
             previous_KKS = mpd['Код KKS'][j]
-            column_a[k].value = mpd['Код KKS'][j] + ' ' +mpd['Тип прокладки'][j] + ' прокладка'
-            column_a[k].alignment = Alignment(horizontal="center")
-            column_a[k].font = Font(name='Times New Roman', size = 18)
-            sheet.merge_cells(start_row = (k + 1), start_column = 1, end_row = (k + 1), end_column = 13 )
+            column_a[k].value = mpd['Код KKS'][j] + ' ' + mpd['Тип прокладки'][j] + ' прокладка''\n' + mpd['Система'][j]
+            column_a[k].alignment = Alignment(wrapText=True, horizontal="center")
+            sheet.row_dimensions[k+1].height = 50
+            column_a[k].font = Font(name='Times New Roman', size=18, bold=True)
+            sheet.merge_cells(start_row=(k + 1), start_column=1, end_row=(k + 1), end_column=13)
         if j > 0 and previous_ground_type != mpd['Тип прокладки'][j]:
             previous_ground_type = mpd['Тип прокладки'][j]
-            column_a[k].value = mpd['Код KKS'][j] + ' ' +mpd['Тип прокладки'][j] + ' прокладка'
-            column_a[k].alignment = Alignment(horizontal="center")
-            column_a[k].font = Font(name='Times New Roman', size = 18)
+            column_a[k].value = mpd['Код KKS'][j] + ' ' + mpd['Тип прокладки'][j] + ' прокладка'"\n" + mpd['Система'][j]
+            column_a[k].alignment = Alignment(wrapText=True, horizontal="center")
+            sheet.row_dimensions[k+1].height = 50
+            column_a[k].font = Font(name='Times New Roman', size=18, bold=True)
             sheet.merge_cells(start_row=(k + 1), start_column=1, end_row=(k + 1), end_column=13)
         column_a[i].value = i_df
         column_a[i].number_format = "0"
@@ -1207,11 +1239,10 @@ def mpa_write():
     j = 0
     m = 0
     while i <= l:
-        #sheet.merge_cells(start_row=(i), start_column=1, end_row=(i), end_column=12)
-        column_g[i-1].value = mpa_slise['Код KKS'][j] +' ' + mpa_slise['Тип прокладки'][j]
+        column_g[i-1].value = mpa_slise['Код KKS'][j] + ' ' + mpa_slise['Тип прокладки'][j]
         column_g[i-1].alignment = Alignment(horizontal="center")
         column_g[i-1].font = Font(name='Arial', size=14, bold = True)
-
+        #sheet.merge_cells(start_row=i, start_column=1, end_row=i, end_column=12)
         column_a[i].value = m + 1
         column_g[i].value = mpa_slise['mati_2m100_80mm * Количество'][j] * 1.236
         column_d[i].value = 'Сборный'
@@ -1474,6 +1505,7 @@ def mpa_write():
     for cell in sheet['G'][3:]:
         if cell.value == 0:
             sheet.delete_rows(cell.row)
+
         #elif 'надземная' in cell.value or 'подземная' in cell.value :
             #continue
         # else:
