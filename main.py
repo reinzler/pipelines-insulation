@@ -15,16 +15,16 @@ import snoop
 
 
 
-КодKKS = 'KUR.0130.00UNZ.SBA.TS.PA0046'
-Архивный = 'А-999999 пм'
-дата = '17.10.2022'
+КодKKS = 'KUR.0130.00USY.0.TZ.PA0025'
+Архивный = ' '
+дата = '01.11.2022'
 Исполнитель = 'О.А. Тимофеева'
-Наименование_работы = 'Тепловые сети промплощадки (00UNZ).\nТепловые сети в канале к зданию 02UYX. Тепловая изоляция'
+Наименование_работы = 'Эстакада технологических трубопроводов (00USY)\nЭстакада к зданию 20UMA (участок 1) \nСетевая вода от здания 20UMA к зданию 00UNA'
 Исполнитель_должн = 'Разработал инж. 2к.'
-КодKKSдокумента = 'KUR.0130.00UNZ.SBA.TS.TB0050'
-пункт_графика = '6.11.2.11.3'
-КодKKSспецификацииРД = 'KUR.0130.00UNZ.SBA.TS.TB0050.S0001'
-КодKKSспецификацииарматурыРД = 'KUR.0130.00UNZ.SBA.TS.TB0050.S0002'
+КодKKSдокумента = 'KUR.0130.00USY.0.TK.TB0036'
+пункт_графика = '2.28.2.1.8'
+КодKKSспецификацииРД = 'KUR.0130.00USY.0.TK.TB0036.S0001'
+КодKKSспецификацииарматурыРД = 'KUR.0130.00USY.0.TK.TB0036.S0002'
 номерМДС = ''
 
 
@@ -340,7 +340,7 @@ def pipelines_parse():
 
     my_df = (
         pd.read_excel(
-            "input/KUR.0130.00UNZ.SBA.TS.TB0050.S0001-MPA0001.xls",
+            "input/KUR.0130.00USY.0.TK.TB0036.S0001-MPA0001.xls",
             sheet_name="Sheet1",
             header=1,
             usecols=['Код KKS', 'Наименование и техническая   характеристика\n\n', 'Примечание'],
@@ -396,12 +396,13 @@ def pipelines_parse():
     pipe_parsed.index = ['{0}'.format(n) for n in range(pipe_parsed.index.shape[0])]
     pipe_parsed.rename(columns={'Наименование и техническая   характеристика\n\n': 'Наименование и техническая характеристика', 'Длина': 'Количество'}, inplace=True)
     pipe_parsed["Код KKS"] = pipe_parsed["Код KKS"].replace(r'\s+', '', regex=True)
-    # print(type(pipe_parsed["Код KKS"][0]))
+    for i in range(len(pipe_parsed["Код KKS"])):
+        pipe_parsed["Код KKS"][i] = pipe_parsed["Код KKS"][i].strip()
     ### Оставляем в наименоавании только "Труба" и диаметр
     for i in range(len(pipe_parsed['Наименование и техническая характеристика'])):
         end = pipe_parsed['Наименование и техническая характеристика'][i].index("СТО")
         pipe_parsed['Наименование и техническая характеристика'][i] = pipe_parsed['Наименование и техническая характеристика'][i][:end]
-    #pipe_parsed.to_excel("pipe_parsed.xlsx")
+    pipe_parsed.to_excel("pipe_parsed.xlsx")
     return pipe_parsed
 
 #pipe_parsed = pipelines_parse()
@@ -417,138 +418,153 @@ def parse_note(row):
 #   header=1
 # ).columns
 @snoop
+def armatura_presence():
+    print('Есть ли арматура в комплекте? Напишите "да", если есть', sep='\n')
+    armatura_presence = str(input())
+    return armatura_presence
+@snoop
 def parse_armatura():
-    armatura = (
-        pd.read_excel(
-            "input/KUR.0130.00UNZ.SBA.TS.TB0050.S0002-MPA0001.xls",
-            sheet_name="CommonList",
-            header=1,
-            usecols=['Код KKS', 'Наименование и техническая   характеристика', 'Примечание']
+    if armatura_presence != "да":
+        return None
+    else:
+        armatura = (
+            pd.read_excel(
+                "input/KUR.0130.00USY.0.TK.TB0036.S0002-MPA0001.xlsx",
+                sheet_name="CommonList",
+                header=1,
+                usecols=['Код KKS', 'Наименование и техническая   характеристика', 'Примечание']
+            )
+            .dropna()
+            .reset_index(drop=True)
         )
-        .dropna()
-        .reset_index(drop=True)
-    )
 
-    armatura["Диаметр"] = (
-        armatura["Наименование и техническая   характеристика"]
-        .str.extract("DN\s([0-9]+);").astype('int')
-    )
-    armatura["Наименование и техническая   характеристика"] = (
-        armatura["Наименование и техническая   характеристика"]
-        .str.extract('([^0-9;]+)').astype('str')
+        armatura["Диаметр"] = (
+            armatura["Наименование и техническая   характеристика"]
+            .str.extract("DN\s([0-9]+);").astype('int')
+        )
+        armatura["Наименование и техническая   характеристика"] = (
+            armatura["Наименование и техническая   характеристика"]
+            .str.extract('([^0-9;]+)').astype('str')
 
-    )
+        )
 
 
-    armatura["Тип прокладки"] = armatura.apply(parse_note, axis=1)
+        armatura["Тип прокладки"] = armatura.apply(parse_note, axis=1)
 
-    # Парсим  код атрамтуры
-    armatura.insert(1, "Постфикс Код KKS", armatura["Код KKS"].str[7:])
-    armatura["Код KKS"] = armatura["Код KKS"].str[:7]
+        # Парсим  код арматуры
+        armatura.insert(1, "Постфикс Код KKS", armatura["Код KKS"].str[7:])
+        armatura["Код KKS"] = armatura["Код KKS"].str[:7]
 
-    # Фильтруеми воздушники
-    #armatura = armatura.loc[~armatura["Постфикс Код КодKKSдокумента"].str.contains("AA5")]
-    armatura["Количество"] = 1
+        # Фильтруеми воздушники
+        #armatura = armatura.loc[~armatura["Постфикс Код КодKKSдокумента"].str.contains("AA5")]
+        armatura["Количество"] = 1
 
-    armatura = armatura.groupby(by=["Код KKS", "Диаметр", "Тип прокладки", "Наименование и техническая   характеристика",],
-                                as_index=False)["Количество"].sum()
-    armatura.rename(
-        columns={'Наименование и техническая   характеристика': 'Наименование и техническая характеристика'},
-        inplace=True)
+        armatura = armatura.groupby(by=["Код KKS", "Диаметр", "Тип прокладки", "Наименование и техническая   характеристика",],
+                                    as_index=False)["Количество"].sum()
+        armatura.rename(
+            columns={'Наименование и техническая   характеристика': 'Наименование и техническая характеристика'},
+            inplace=True)
 
-    #Для того, чтобы получить корректное значение температруы для арматуры - не парсим это значение из спецификации,
-    # а передаем "в наследство" от трубы. Чтобы реализовать это - создаем маленький датафрейм, где всего
-    # 2 столбца - Код KKS, температура (повторы выкинуты)- это срез из распарсенного экселя труб. И по соотвествию
-    # системы проставляем  #температуру для арматуры.
-    armatura["Температура"] = np.nan
-    armatura["Система"] = np.nan
-    pipe_parsed_slice = pd.DataFrame(data=pipe_parsed['Код KKS'])
-    pipe_parsed_slice.insert(1, "Температура", pipe_parsed['Температура'])
-    pipe_parsed_slice.insert(2, "Система", pipe_parsed['Система'])
-    pipe_parsed_slice = pipe_parsed_slice.drop_duplicates()
-    #pipe_parsed_slice.to_excel("pipe_parsed_slice.xlsx", index=False)
-    j = 0
-    print(pipe_parsed_slice["Код KKS"][0])
-    for i in range(len(armatura["Код KKS"])):
-        if armatura["Код KKS"][i] == pipe_parsed_slice["Код KKS"][j]:
-            armatura["Температура"][i] = pipe_parsed_slice["Температура"][j]
-            armatura["Система"][i] = pipe_parsed_slice["Система"][j]
-        else:
-            armatura["Температура"][i] = pipe_parsed_slice["Температура"][j+1]
-            armatura["Система"][i] = pipe_parsed_slice["Система"][j+1]
-            j += 1
+        #Для того, чтобы получить корректное значение температруы для арматуры - не парсим это значение из спецификации,
+        # а передаем "в наследство" от трубы. Чтобы реализовать это - создаем маленький датафрейм, где всего
+        # 2 столбца - Код KKS, температура (повторы выкинуты)- это срез из распарсенного экселя труб. И по соотвествию
+        # системы проставляем  #температуру для арматуры.
+        armatura["Температура"] = np.nan
+        armatura["Система"] = np.nan
+        pipe_parsed_slice = pd.DataFrame(data=pipe_parsed['Код KKS'])
+        pipe_parsed_slice.insert(1, "Температура", pipe_parsed['Температура'])
+        pipe_parsed_slice.insert(2, "Система", pipe_parsed['Система'])
+        pipe_parsed_slice = pipe_parsed_slice.drop_duplicates()
+        #pipe_parsed_slice.to_excel("pipe_parsed_slice.xlsx", index=False)
+        armatura.to_excel("armatura_parsed.xlsx", index=False)
+        j = 0
+        print(pipe_parsed_slice["Код KKS"][0])
+        for i in range(len(armatura["Код KKS"])):
+            if armatura["Код KKS"][i] == pipe_parsed_slice["Код KKS"][j]:
+                armatura["Температура"][i] = pipe_parsed_slice["Температура"][j]
+                armatura["Система"][i] = pipe_parsed_slice["Система"][j]
+            else:
+                armatura["Температура"][i] = pipe_parsed_slice["Температура"][j+1]
+                armatura["Система"][i] = pipe_parsed_slice["Система"][j+1]
+                j += 1
 
     #armatura.to_excel("armatura_parsed.xlsx", index=False)
-    return armatura
+        return armatura
 
 #armatura_parsed = parse_armatura()
 ### Создаем таблицу расходов материалов для расчета арматуры DN20 - DN800
 ### Расчет позиций 1-5 для арматуры DN2-DN800
 @snoop
 def armatura_pos1_5():
-    armatura_pos1_5_data = {
-        'Диаметр': [15, 15, 20, 20, 25, 25, 32, 32, 40, 40, 50, 50, 65, 65, 80, 80, 100, 100, 125, 125, 150, 150, 200, 200,
-        250, 250, 300, 300, 350, 350, 400, 400, 500, 500, 600, 600, 700, 700, 800, 800],
-        'δк': [40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40,
-        60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60],
-        'Тип прокладки': ['подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
-        'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная',
-        'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
-        'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная',
-        'подземная', 'надземная', 'подземная', 'надземная','подземная', 'надземная'],
-        #'Поверхность, м2, ПОЗ.1':[0.158, 0.185, 0.18, 0.208, 0.199, 0.23, 0.26, 0.3, 0.29, 0.33, 0.3, 0.34, 0.34, 0.38,
-         #0.41, 0.45, 0.47, 0.52, 0.61, 0.66],
-        #'Поверхность, м2, ПОЗ.2': [0.018, 0.027, 0.02, 0.03, 0.021, 0.031, 0.02, 0.03, 0.03, 0.04, 0.03, 0.04, 0.03, 0.04,
-        #0.03, 0.05, 0.04, 0.05, 0.04, 0.06],
-        #'Поверхность, м2, ПОЗ.3': [0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004,
-        #0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005],
-        #'Объем, м3, ПОЗ.5': [0.005, 0.009, 0.005, 0.01, 0.007, 0.012, 0.014, 0.026, 0.017, 0.028, 0.018, 0.03, 0.02, 0.033,
-        # 0.024, 0.04, 0.028, 0.047, 0.037, 0.06],  #
-        'V, м3': [0.01, 0.018, 0.01, 0.018, 0.01, 0.018, 0.01, 0.02, 0.014, 0.024, 0.028, 0.052, 0.034, 0.056, 0.036, 0.06,
-        0.04, 0.066, 0.048, 0.08, 0.056, 0.094, 0.074, 0.12, 0.046, 0.072, 0.054, 0.084, 0.064, 0.1, 0.076, 0.12, 0.1, 0.15,
-        0.13, 0.2, 0.19, 0.32, 0.21, 0.32],  ##########
-        'S, м2': [0.420, 0.518, 0.420, 0.518, 0.420, 0.518, 0.472, 0.576, 0.514, 0.624, 0.632, 0.760, 0.732, 0.860, 0.752,
-        0.880, 0.832, 0.960, 0.972, 1.140, 1.132, 1.280, 1.412, 1.600, 1.556, 1.76, 1.816, 2.008, 2.100, 2.324, 2.404, 2.636,
-        3.120, 3.384, 3.916, 4.196, 5.07, 6.11, 5.64, 6.73]
-    }
-    armatura_pos1_5 = pd.DataFrame(armatura_pos1_5_data)
-    return armatura_pos1_5
+    if armatura_presence != "да":
+        return None
+    else:
+        armatura_pos1_5_data = {
+            'Диаметр': [15, 15, 20, 20, 25, 25, 32, 32, 40, 40, 50, 50, 65, 65, 80, 80, 100, 100, 125, 125, 150, 150, 200, 200,
+            250, 250, 300, 300, 350, 350, 400, 400, 500, 500, 600, 600, 700, 700, 800, 800],
+            'δк': [40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40,
+            60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60],
+            'Тип прокладки': ['подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
+            'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная',
+            'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
+            'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная',
+            'подземная', 'надземная', 'подземная', 'надземная','подземная', 'надземная'],
+            #'Поверхность, м2, ПОЗ.1':[0.158, 0.185, 0.18, 0.208, 0.199, 0.23, 0.26, 0.3, 0.29, 0.33, 0.3, 0.34, 0.34, 0.38,
+             #0.41, 0.45, 0.47, 0.52, 0.61, 0.66],
+            #'Поверхность, м2, ПОЗ.2': [0.018, 0.027, 0.02, 0.03, 0.021, 0.031, 0.02, 0.03, 0.03, 0.04, 0.03, 0.04, 0.03, 0.04,
+            #0.03, 0.05, 0.04, 0.05, 0.04, 0.06],
+            #'Поверхность, м2, ПОЗ.3': [0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005, 0.004,
+            #0.005, 0.004, 0.005, 0.004, 0.005, 0.004, 0.005],
+            #'Объем, м3, ПОЗ.5': [0.005, 0.009, 0.005, 0.01, 0.007, 0.012, 0.014, 0.026, 0.017, 0.028, 0.018, 0.03, 0.02, 0.033,
+            # 0.024, 0.04, 0.028, 0.047, 0.037, 0.06],  #
+            'V, м3': [0.01, 0.018, 0.01, 0.018, 0.01, 0.018, 0.01, 0.02, 0.014, 0.024, 0.028, 0.052, 0.034, 0.056, 0.036, 0.06,
+            0.04, 0.066, 0.048, 0.08, 0.056, 0.094, 0.074, 0.12, 0.046, 0.072, 0.054, 0.084, 0.064, 0.1, 0.076, 0.12, 0.1, 0.15,
+            0.13, 0.2, 0.19, 0.32, 0.21, 0.32],  ##########
+            'S, м2': [0.420, 0.518, 0.420, 0.518, 0.420, 0.518, 0.472, 0.576, 0.514, 0.624, 0.632, 0.760, 0.732, 0.860, 0.752,
+            0.880, 0.832, 0.960, 0.972, 1.140, 1.132, 1.280, 1.412, 1.600, 1.556, 1.76, 1.816, 2.008, 2.100, 2.324, 2.404, 2.636,
+            3.120, 3.384, 3.916, 4.196, 5.07, 6.11, 5.64, 6.73]
+        }
+        armatura_pos1_5 = pd.DataFrame(armatura_pos1_5_data)
+        return armatura_pos1_5
 
 #armatura_pos1_5 = armatura_pos1_5()
 @snoop
 def armatura_fasteners():
-    armatura_fasteners_data = {
-        'Диаметр':[15, 15, 20, 20, 25, 25, 32, 32, 40, 40, 50, 50, 65, 65, 80, 80, 100, 100, 125, 125, 150, 150, 200, 200,
-        250, 250, 300, 300, 350, 350, 400, 400, 500, 500, 600, 600, 700, 700, 800, 800],
-        'Тип прокладки': ['подземная', 'надземная','подземная', 'надземная','подземная', 'надземная', 'подземная', 'надземная',
-        'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
-        'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная',
-        'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
-        'надземная', 'подземная', 'надземная', 'подземная', 'надземная'],
-        'δк': [40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40,
-        60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60],
-        'Лента АД1.08х20': [0.066, 0.076, 0.066, 0.076, 0.066, 0.076, 0.071, 0.082, 0.073, 0.084, 0.078, 0.097, 0.083, 0.106,
-        0.097, 0.106, 0.097, 0.115, 0.106, 0.123, 0.115, 0.132, 0.132, 0.141, 0,0,0,0,0,0,0,0,0,0,0,0,0.37,0.39,0.37,0.39],
-        'Проволока 0,8-0-Ч': [0.01, 0.02, 0.01, 0.02, 0.01, 0.02, 0.02, 0.024, 0.02, 0.022, 0.02, 0.026, 0.024, 0.028, 0.024,
-        0.03, 0.026, 0.032, 0.032, 0.038, 0.038, 0.042, 0.046, 0.052, 0.03, 0.034, 0.037, 0.04, 0.044, 0.046, 0.05, 0.053,
-        0.066, 0.069, 0.084, 0.087,0.11,0.11,0.11,0.11],
-        'Пряжка тип II-А': [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0],
-        'Заклепка комбинированная ЗК-12-4,5':[8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 12, 8, 12, 12, 12, 12, 12,
-        34, 40, 40, 40, 40, 40, 46, 46, 46, 52, 52, 52,60,60,60,60],
-        'Крючок':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.056,0.056,0.056,0.056,0.056,0.056,0.056,
-        0.056,0.056,0.056,0.056,0.056,0.07,0.07,0.07,0.07],
-        'Серьга':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.044,0.044,0.044,0.044,0.044,0.044,0.044,0.044,
-        0.044,0.044,0.044,0.044,0.055,0.055,0.055,0.055],
-        'Рычаг':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,
-        0.12,0.12,0.12,0.15,0.15,0.15,0.15],
-        'Основание':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.064,0.064,0.064,0.064,0.064,0.064,0.064,
-        0.064,0.064,0.064,0.064,0.064,0.08,0.08,0.08,0.08],
-        'Заклепка 4x24.37':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.056,0.056,0.056,0.056,0.056,0.056,0.056,
-        0.056,0.056,0.056,0.056,0.056,0.07,0.07,0.07,0.07]
-    }
-    armatura_fasteners = pd.DataFrame(armatura_fasteners_data)
-    return armatura_fasteners
+    if armatura_presence != "да":
+        return None
+    else:
+        armatura_fasteners_data = {
+            'Диаметр':[15, 15, 20, 20, 25, 25, 32, 32, 40, 40, 50, 50, 65, 65, 80, 80, 100, 100, 125, 125, 150, 150, 200, 200,
+            250, 250, 300, 300, 350, 350, 400, 400, 500, 500, 600, 600, 700, 700, 800, 800],
+            'Тип прокладки': ['подземная', 'надземная','подземная', 'надземная','подземная', 'надземная', 'подземная', 'надземная',
+            'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
+            'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная',
+            'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная', 'надземная', 'подземная',
+            'надземная', 'подземная', 'надземная', 'подземная', 'надземная'],
+            'δк': [40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40,
+            60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60, 40, 60],
+            'Лента АД1.08х20': [0.066, 0.076, 0.066, 0.076, 0.066, 0.076, 0.071, 0.082, 0.073, 0.084, 0.078, 0.097, 0.083, 0.106,
+            0.097, 0.106, 0.097, 0.115, 0.106, 0.123, 0.115, 0.132, 0.132, 0.141, 0,0,0,0,0,0,0,0,0,0,0,0,0.37,0.39,0.37,0.39],
+            'Проволока 0,8-0-Ч': [0.01, 0.02, 0.01, 0.02, 0.01, 0.02, 0.02, 0.024, 0.02, 0.022, 0.02, 0.026, 0.024, 0.028, 0.024,
+            0.03, 0.026, 0.032, 0.032, 0.038, 0.038, 0.042, 0.046, 0.052, 0.03, 0.034, 0.037, 0.04, 0.044, 0.046, 0.05, 0.053,
+            0.066, 0.069, 0.084, 0.087,0.11,0.11,0.11,0.11],
+            'Пряжка тип II-А': [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0],
+            'Заклепка комбинированная ЗК-12-4,5':[8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 12, 8, 12, 12, 12, 12, 12,
+            34, 40, 40, 40, 40, 40, 46, 46, 46, 52, 52, 52,60,60,60,60],
+            'Крючок':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.056,0.056,0.056,0.056,0.056,0.056,0.056,
+            0.056,0.056,0.056,0.056,0.056,0.07,0.07,0.07,0.07],
+            'Серьга':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.044,0.044,0.044,0.044,0.044,0.044,0.044,0.044,
+            0.044,0.044,0.044,0.044,0.055,0.055,0.055,0.055],
+            'Рычаг':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,0.12,
+            0.12,0.12,0.12,0.15,0.15,0.15,0.15],
+            'Основание':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.064,0.064,0.064,0.064,0.064,0.064,0.064,
+            0.064,0.064,0.064,0.064,0.064,0.08,0.08,0.08,0.08],
+            'Заклепка 4x24.37':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.056,0.056,0.056,0.056,0.056,0.056,0.056,
+            0.056,0.056,0.056,0.056,0.056,0.07,0.07,0.07,0.07]
+        }
+        armatura_fasteners = pd.DataFrame(armatura_fasteners_data)
+        return armatura_fasteners
 
 #armatura_fasteners = armatura_fasteners()
 # не забыть пересчитать Лак БТ-7 в м2, формула такая: массу ленты 0,7х20/5,495, лак используется только для подземной прокладки(видимо красим ленту)
@@ -917,53 +933,56 @@ def pipeline_insun_preporation():
 ### расчет арматуры
 @snoop
 def valves_insulation():
-    valves_fasteners = pd.merge(armatura_parsed, armatura_fasteners, on = ['Диаметр', 'Тип прокладки'])
-    valves_fasteners['Лента АД1.08х20 * Количество'] = valves_fasteners['Лента АД1.08х20'] * valves_fasteners['Количество']
-    valves_fasteners['Лента АД1.08х20 * Количество'] = valves_fasteners['Лента АД1.08х20 * Количество'].round(3)
-    valves_fasteners['Проволока 0,8-0-Ч * Количество'] = valves_fasteners['Проволока 0,8-0-Ч'] * valves_fasteners['Количество']
-    valves_fasteners['Проволока 0,8-0-Ч * Количество'] = valves_fasteners['Проволока 0,8-0-Ч * Количество'].round(3)
-    valves_fasteners['Пряжка тип II-А * Количество'] = valves_fasteners['Пряжка тип II-А'] * valves_fasteners['Количество']
-    valves_fasteners['Заклепка комбинированная ЗК-12-4,5 * Количество'] = valves_fasteners['Заклепка комбинированная ЗК-12-4,5'] * valves_fasteners['Количество']
-    valves_fasteners['Крючок * Количество'] = valves_fasteners['Крючок'] * valves_fasteners['Количество']
-    valves_fasteners['Крючок * Количество'] = valves_fasteners['Крючок * Количество'].round(3)
-    valves_fasteners['Серьга * Количество'] = valves_fasteners['Серьга'] * valves_fasteners['Количество']
-    valves_fasteners['Серьга * Количество'] = valves_fasteners['Серьга * Количество'].round(3)
-    valves_fasteners['Рычаг * Количество'] = valves_fasteners['Рычаг'] * valves_fasteners['Количество']
-    valves_fasteners['Рычаг * Количество'] = valves_fasteners['Рычаг * Количество'].round(3)
-    valves_fasteners['Основание * Количество'] = valves_fasteners['Основание'] * valves_fasteners['Количество']
-    valves_fasteners['Основание * Количество'] = valves_fasteners['Основание * Количество'].round(3)
-    valves_fasteners['Заклепка 4x24.37 * Количество'] = valves_fasteners['Заклепка 4x24.37'] * valves_fasteners['Количество']
-    valves_fasteners['Заклепка 4x24.37 * Количество'] = valves_fasteners['Заклепка 4x24.37 * Количество'].round(3)
-    valves_insulation = pd.merge(valves_fasteners, armatura_pos1_5, on = ['Диаметр', 'Тип прокладки', 'δк'])
-    valves_insulation["mati_2m100_60mm"] = np.nan
-    valves_insulation["mati_2m100_40mm"] = np.nan
-    valves_insulation["steel_0_8mm"] = np.nan
-    valves_insulation['T_23_2m100_60mm'] = np.nan
-    valves_insulation['T_23_2m100_40mm'] = np.nan
-    valves_insulation['steel_0_8mm * Количество'] = np.nan
-    for i in range(len(valves_insulation)):
-        if valves_insulation['Тип прокладки'][i] == 'надземная':
-            valves_insulation["mati_2m100_60mm"][i] = valves_insulation['V, м3'][i]
-            valves_insulation['T_23_2m100_60mm'][i] = valves_insulation["mati_2m100_60mm"][i] * 33 * valves_insulation["Количество"][i]
-            valves_insulation['T_23_2m100_60mm'][i] = valves_insulation['T_23_2m100_60mm'][i].round(3)
-            valves_insulation["steel_0_8mm"][i] = valves_insulation['S, м2'][i]
+    if armatura_presence != "да":
+        return None
+    else:
+        valves_fasteners = pd.merge(armatura_parsed, armatura_fasteners, on = ['Диаметр', 'Тип прокладки'])
+        valves_fasteners['Лента АД1.08х20 * Количество'] = valves_fasteners['Лента АД1.08х20'] * valves_fasteners['Количество']
+        valves_fasteners['Лента АД1.08х20 * Количество'] = valves_fasteners['Лента АД1.08х20 * Количество'].round(3)
+        valves_fasteners['Проволока 0,8-0-Ч * Количество'] = valves_fasteners['Проволока 0,8-0-Ч'] * valves_fasteners['Количество']
+        valves_fasteners['Проволока 0,8-0-Ч * Количество'] = valves_fasteners['Проволока 0,8-0-Ч * Количество'].round(3)
+        valves_fasteners['Пряжка тип II-А * Количество'] = valves_fasteners['Пряжка тип II-А'] * valves_fasteners['Количество']
+        valves_fasteners['Заклепка комбинированная ЗК-12-4,5 * Количество'] = valves_fasteners['Заклепка комбинированная ЗК-12-4,5'] * valves_fasteners['Количество']
+        valves_fasteners['Крючок * Количество'] = valves_fasteners['Крючок'] * valves_fasteners['Количество']
+        valves_fasteners['Крючок * Количество'] = valves_fasteners['Крючок * Количество'].round(3)
+        valves_fasteners['Серьга * Количество'] = valves_fasteners['Серьга'] * valves_fasteners['Количество']
+        valves_fasteners['Серьга * Количество'] = valves_fasteners['Серьга * Количество'].round(3)
+        valves_fasteners['Рычаг * Количество'] = valves_fasteners['Рычаг'] * valves_fasteners['Количество']
+        valves_fasteners['Рычаг * Количество'] = valves_fasteners['Рычаг * Количество'].round(3)
+        valves_fasteners['Основание * Количество'] = valves_fasteners['Основание'] * valves_fasteners['Количество']
+        valves_fasteners['Основание * Количество'] = valves_fasteners['Основание * Количество'].round(3)
+        valves_fasteners['Заклепка 4x24.37 * Количество'] = valves_fasteners['Заклепка 4x24.37'] * valves_fasteners['Количество']
+        valves_fasteners['Заклепка 4x24.37 * Количество'] = valves_fasteners['Заклепка 4x24.37 * Количество'].round(3)
+        valves_insulation = pd.merge(valves_fasteners, armatura_pos1_5, on = ['Диаметр', 'Тип прокладки', 'δк'])
+        valves_insulation["mati_2m100_60mm"] = np.nan
+        valves_insulation["mati_2m100_40mm"] = np.nan
+        valves_insulation["steel_0_8mm"] = np.nan
+        valves_insulation['T_23_2m100_60mm'] = np.nan
+        valves_insulation['T_23_2m100_40mm'] = np.nan
+        valves_insulation['steel_0_8mm * Количество'] = np.nan
+        for i in range(len(valves_insulation)):
+            if valves_insulation['Тип прокладки'][i] == 'надземная':
+                valves_insulation["mati_2m100_60mm"][i] = valves_insulation['V, м3'][i]
+                valves_insulation['T_23_2m100_60mm'][i] = valves_insulation["mati_2m100_60mm"][i] * 33 * valves_insulation["Количество"][i]
+                valves_insulation['T_23_2m100_60mm'][i] = valves_insulation['T_23_2m100_60mm'][i].round(3)
+                valves_insulation["steel_0_8mm"][i] = valves_insulation['S, м2'][i]
 
-        else:
-            valves_insulation["mati_2m100_40mm"][i] = valves_insulation['V, м3'][i]
-            valves_insulation['T_23_2m100_40mm'][i] = valves_insulation["mati_2m100_40mm"][i] * 43 * valves_insulation["Количество"][i]
-            valves_insulation['T_23_2m100_40mm'][i] = valves_insulation['T_23_2m100_40mm'][i].round(3)
-            valves_insulation["steel_0_8mm"][i] = valves_insulation['S, м2'][i]
+            else:
+                valves_insulation["mati_2m100_40mm"][i] = valves_insulation['V, м3'][i]
+                valves_insulation['T_23_2m100_40mm'][i] = valves_insulation["mati_2m100_40mm"][i] * 43 * valves_insulation["Количество"][i]
+                valves_insulation['T_23_2m100_40mm'][i] = valves_insulation['T_23_2m100_40mm'][i].round(3)
+                valves_insulation["steel_0_8mm"][i] = valves_insulation['S, м2'][i]
 
-    valves_insulation['mati_2m100_40mm * Количество'] = valves_insulation["mati_2m100_40mm"] * valves_insulation["Количество"]
-    valves_insulation['mati_2m100_40mm * Количество'] = valves_insulation["mati_2m100_40mm * Количество"].round(3)
-    valves_insulation['mati_2m100_60mm * Количество'] = valves_insulation["mati_2m100_60mm"] * valves_insulation["Количество"]
-    valves_insulation['mati_2m100_60mm * Количество'] = valves_insulation['mati_2m100_60mm * Количество'].round(3)
-    valves_insulation['steel_0_8mm * Количество'] = valves_insulation["steel_0_8mm"] * valves_insulation["Количество"]
-    valves_insulation['steel_0_8mm * Количество'] = valves_insulation["steel_0_8mm * Количество"].round(3)
-    valves_insulation = (valves_insulation.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр' ], ascending=[True, True, False])).reset_index()
-    #valves_insulation.to_excel("valves.xlsx", index=False)
+        valves_insulation['mati_2m100_40mm * Количество'] = valves_insulation["mati_2m100_40mm"] * valves_insulation["Количество"]
+        valves_insulation['mati_2m100_40mm * Количество'] = valves_insulation["mati_2m100_40mm * Количество"].round(3)
+        valves_insulation['mati_2m100_60mm * Количество'] = valves_insulation["mati_2m100_60mm"] * valves_insulation["Количество"]
+        valves_insulation['mati_2m100_60mm * Количество'] = valves_insulation['mati_2m100_60mm * Количество'].round(3)
+        valves_insulation['steel_0_8mm * Количество'] = valves_insulation["steel_0_8mm"] * valves_insulation["Количество"]
+        valves_insulation['steel_0_8mm * Количество'] = valves_insulation["steel_0_8mm * Количество"].round(3)
+        valves_insulation = (valves_insulation.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр' ], ascending=[True, True, False])).reset_index()
+        #valves_insulation.to_excel("valves.xlsx", index=False)
 
-    return valves_insulation
+        return valves_insulation
 
 #valves_insulation = valves_insulation()
     ### Подготовка датафрейма для выводов
@@ -988,24 +1007,28 @@ def mpd_preporation():
     mpd_pipeline_with_insulation.insert(16, "Температура", pipeline_with_insulation["Температура"])
     mpd_pipeline_with_insulation.insert(17, "Система", pipeline_with_insulation["Система"])
     mpd_pipeline_with_insulation = (mpd_pipeline_with_insulation.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
-    mpd_valves_insulation = pd.DataFrame(data = valves_insulation['Код KKS'])
-    mpd_valves_insulation.insert(1,"Диаметр", valves_insulation['Диаметр'])
-    mpd_valves_insulation.insert(2,"Тип прокладки", valves_insulation['Тип прокладки'])
-    mpd_valves_insulation.insert(3,"Количество", valves_insulation['Количество'])
-    mpd_valves_insulation['Количество'] = mpd_valves_insulation['Количество'].round(0)
-    mpd_valves_insulation.insert(4,"Наименование и техническая характеристика", valves_insulation['Наименование и техническая характеристика'])
-    mpd_valves_insulation.insert(5,"Маты 2М-100 60мм", valves_insulation["mati_2m100_60mm"])
-    mpd_valves_insulation.insert(6,"Маты 2М-100 40мм", valves_insulation["mati_2m100_40mm"])
-    mpd_valves_insulation.insert(7,"Сталь 0.8мм", valves_insulation["steel_0_8mm"])
-    mpd_valves_insulation.insert(8,"δк", valves_insulation["δк"])
-    mpd_valves_insulation.insert(9,"Температура",  armatura_parsed["Температура"])
-    mpd_valves_insulation.insert(10,"Система",  armatura_parsed["Система"])
-    mpd = pd.concat([mpd_pipeline_with_insulation, mpd_valves_insulation], ignore_index=True)
+
+    if armatura_presence == "да":
+        mpd_valves_insulation = pd.DataFrame(data = valves_insulation['Код KKS'])
+        mpd_valves_insulation.insert(1,"Диаметр", valves_insulation['Диаметр'])
+        mpd_valves_insulation.insert(2,"Тип прокладки", valves_insulation['Тип прокладки'])
+        mpd_valves_insulation.insert(3,"Количество", valves_insulation['Количество'])
+        mpd_valves_insulation['Количество'] = mpd_valves_insulation['Количество'].round(0)
+        mpd_valves_insulation.insert(4,"Наименование и техническая характеристика", valves_insulation['Наименование и техническая характеристика'])
+        mpd_valves_insulation.insert(5,"Маты 2М-100 60мм", valves_insulation["mati_2m100_60mm"])
+        mpd_valves_insulation.insert(6,"Маты 2М-100 40мм", valves_insulation["mati_2m100_40mm"])
+        mpd_valves_insulation.insert(7,"Сталь 0.8мм", valves_insulation["steel_0_8mm"])
+        mpd_valves_insulation.insert(8,"δк", valves_insulation["δк"])
+        mpd_valves_insulation.insert(9,"Температура",  armatura_parsed["Температура"])
+        mpd_valves_insulation.insert(10,"Система",  armatura_parsed["Система"])
+        mpd = pd.concat([mpd_pipeline_with_insulation, mpd_valves_insulation], ignore_index=True)
+    else:
+        mpd = mpd_pipeline_with_insulation
     mpd = (mpd.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
     #mpd = (mpd.sort_values(by=['Тип прокладки'], ascending=[True])).reset_index()
     # del mpd['index']
     #mpd.to_excel("mpd.xlsx", index=False)
-    #mpd_pipeline_with_insulation.to_excel("mpd_pipeline_with_insulation.xlsx", index=False)
+    mpd_pipeline_with_insulation.to_excel("mpd_pipeline_with_insulation.xlsx", index=False)
     return mpd
 
 #mpd = mpd_preporation()
@@ -1102,7 +1125,7 @@ def output():
                     column_m[i].alignment = Alignment(horizontal="center")
                     column_m[i + 1].value = "(применительно)"
                     column_m[i + 1].alignment = Alignment(horizontal="center")
-            elif 'Задвижка' in mpd['Наименование и техническая характеристика'][j]:
+            elif 'адвижка' in mpd['Наименование и техническая характеристика'][j]:
                 column_b[i].value = 'Задвижка клиновая' + ' DN' + str(mpd['Диаметр'][j])
                 column_b[i].alignment = Alignment(horizontal="left")
                 if mpd['Диаметр'][j] < 250:
@@ -1532,47 +1555,75 @@ def output():
         mpa = pd.concat([pipeline_with_insulation, valves_insulation], ignore_index=True)
         mpa = (mpa.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
         # mpa.to_excel("mpa.xlsx", index=False)
-        del mpa['steel_0_5mm']
-        del mpa['Лента 0,7х20']
-        del mpa['Винт самонарезной']
-        del mpa['Проволока 2-0-Ч']
-        del mpa['Проволока 0,8-0-Ч']
-        del mpa['Скоба опорная']
-        del mpa['Пряжка тип I-О']
-        del mpa['Лак БТ-7,кг']
-        del mpa['V, м3']
-        del mpa['S, м2']
-        del mpa['steel_0_8mm']
-        del mpa['Лента АД1.08х20']
-        del mpa['Пряжка тип II-А']
-        del mpa['Заклепка комбинированная ЗК-12-4,5']
-        del mpa['Наименование и техническая характеристика']
-        del mpa['Примечание']
-        del mpa['Крючок']
-        del mpa['Серьга']
-        del mpa['Рычаг']
-        del mpa['Основание']
-        del mpa['Заклепка 4x24.37']
+        if armatura_presence == "да":
+            del mpa['steel_0_5mm']
+            del mpa['Лента 0,7х20']
+            del mpa['Винт самонарезной']
+            del mpa['Проволока 2-0-Ч']
+            del mpa['Проволока 0,8-0-Ч']
+            del mpa['Скоба опорная']
+            del mpa['Пряжка тип I-О']
+            del mpa['Лак БТ-7,кг']
+            del mpa['V, м3']
+            del mpa['S, м2']
+            del mpa['steel_0_8mm']
+            del mpa['Лента АД1.08х20']
+            del mpa['Пряжка тип II-А']
+            del mpa['Заклепка комбинированная ЗК-12-4,5']
+            del mpa['Наименование и техническая характеристика']
+            del mpa['Примечание']
+            del mpa['Крючок']
+            del mpa['Серьга']
+            del mpa['Рычаг']
+            del mpa['Основание']
+            del mpa['Заклепка 4x24.37']
+            mpa_slise = mpa.groupby(['Код KKS', 'Тип прокладки'], as_index=False)['mati_2m100_80mm * Количество',
+                                                                                  'mati_2m100_70mm * Количество', 'mati_2m100_60mm * Количество', 'mati_2m100_50mm * Количество',
+                                                                                  'mati_2m100_40mm * Количество', 'mati_m100_70mm * Количество', 'mati_m100_60mm * Количество',
+                                                                                  'mati_m100_50mm * Количество', 'protective_cover_T_23', 'steel_0_5mm * Количество', 'steel_0_8mm * Количество',
+                                                                                  'T_23_2m100_80mm', 'T_23_2m100_70mm', 'T_23_2m100_60mm', 'T_23_2m100_50mm', 'T_23_m100_70mm', 'T_23_m100_60mm',
+                                                                                  'T_23_m100_50mm', 'T_23_2m100_40mm', 'Лента 0,7х20 * Количество', 'Винт самонарезной * Количество',
+                                                                                  'Проволока 2-0-Ч * Количество', 'Проволока 0,8-0-Ч * Количество', 'Скоба опорная * Количество',
+                                                                                  'Пряжка тип I-О * Количество', 'Лак БТ-7,кг * Количество', 'Лак БТ-7,м2 * Количество', 'Лента АД1.08х20 * Количество',
+                                                                                  'Пряжка тип II-А * Количество', 'Заклепка комбинированная ЗК-12-4,5 * Количество', 'Крючок * Количество',
+                                                                                  'Серьга * Количество', 'Рычаг * Количество', 'Основание * Количество', 'Заклепка 4x24.37 * Количество',
+                                                                                  'Лента 2х30 * Длина вертикальных участков', 'Лента 3х30 * Длина вертикальных участков', 'Уголок 30х30x3 * Длина вертикальных участков',
+                                                                                  'Скоба навесная * Длина вертикальных участков', 'Лист АД1.Н-0.8 * Длина вертикальных участков', 'Болт М8 * Длина вертикальных участков',
+                                                                                  'Болт М12 * Длина вертикальных участков', 'Гайка М8 * Длина вертикальных участков', 'Гайка М12 * Длина вертикальных участков',
+                                                                                  'mati_2m100_80mm * Длина вертикальных участков', 'mati_2m100_70mm * Длина вертикальных участков',
+                                                                                  'mati_2m100_60mm * Длина вертикальных участков', 'mati_2m100_50mm * Длина вертикальных участков',
+                                                                                  'mati_m100_70mm * Длина вертикальных участков', 'mati_m100_60mm * Длина вертикальных участков',
+                                                                                  'mati_m100_50mm * Длина вертикальных участков'].sum()
+        else:
+            del mpa['steel_0_5mm']
+            del mpa['Лента 0,7х20']
+            del mpa['Винт самонарезной']
+            del mpa['Проволока 2-0-Ч']
+            del mpa['Проволока 0,8-0-Ч']
+            del mpa['Скоба опорная']
+            del mpa['Пряжка тип I-О']
+            del mpa['Лак БТ-7,кг']
+            del mpa['steel_0_8mm']
+            del mpa['Наименование и техническая характеристика']
+            del mpa['Примечание']
+            mpa_slise = mpa.groupby(['Код KKS', 'Тип прокладки'], as_index=False)['mati_2m100_80mm * Количество',
+                                                                                  'mati_2m100_70mm * Количество', 'mati_2m100_60mm * Количество', 'mati_2m100_50mm * Количество',
+                                                                                  'mati_m100_70mm * Количество', 'mati_m100_60mm * Количество',
+                                                                                  'mati_m100_50mm * Количество', 'protective_cover_T_23', 'steel_0_5mm * Количество', 'steel_0_8mm * Количество',
+                                                                                  'T_23_2m100_80mm', 'T_23_2m100_70mm', 'T_23_2m100_60mm', 'T_23_2m100_50mm', 'T_23_m100_70mm', 'T_23_m100_60mm',
+                                                                                  'T_23_m100_50mm', 'Лента 0,7х20 * Количество', 'Винт самонарезной * Количество',
+                                                                                  'Проволока 2-0-Ч * Количество', 'Проволока 0,8-0-Ч * Количество', 'Скоба опорная * Количество',
+                                                                                  'Пряжка тип I-О * Количество', 'Лак БТ-7,кг * Количество', 'Лак БТ-7,м2 * Количество',
+                                                                                  'Лента 2х30 * Длина вертикальных участков', 'Лента 3х30 * Длина вертикальных участков', 'Уголок 30х30x3 * Длина вертикальных участков',
+                                                                                  'Скоба навесная * Длина вертикальных участков', 'Лист АД1.Н-0.8 * Длина вертикальных участков', 'Болт М8 * Длина вертикальных участков',
+                                                                                  'Болт М12 * Длина вертикальных участков', 'Гайка М8 * Длина вертикальных участков', 'Гайка М12 * Длина вертикальных участков',
+                                                                                  'mati_2m100_80mm * Длина вертикальных участков', 'mati_2m100_70mm * Длина вертикальных участков',
+                                                                                  'mati_2m100_60mm * Длина вертикальных участков', 'mati_2m100_50mm * Длина вертикальных участков',
+                                                                                  'mati_m100_70mm * Длина вертикальных участков', 'mati_m100_60mm * Длина вертикальных участков',
+                                                                                  'mati_m100_50mm * Длина вертикальных участков'].sum()
         #mpa.to_excel("mpa.xlsx", index=False)
         mpa = mpa.fillna(0)
-        mpa_slise = mpa.groupby(['Код KKS', 'Тип прокладки'], as_index=False)['mati_2m100_80mm * Количество',
-        'mati_2m100_70mm * Количество', 'mati_2m100_60mm * Количество', 'mati_2m100_50mm * Количество',
-        'mati_2m100_40mm * Количество', 'mati_m100_70mm * Количество', 'mati_m100_60mm * Количество',
-        'mati_m100_50mm * Количество', 'protective_cover_T_23', 'steel_0_5mm * Количество', 'steel_0_8mm * Количество',
-        'T_23_2m100_80mm', 'T_23_2m100_70mm', 'T_23_2m100_60mm', 'T_23_2m100_50mm', 'T_23_m100_70mm', 'T_23_m100_60mm',
-        'T_23_m100_50mm', 'T_23_2m100_40mm', 'Лента 0,7х20 * Количество','Винт самонарезной * Количество',
-        'Проволока 2-0-Ч * Количество', 'Проволока 0,8-0-Ч * Количество', 'Скоба опорная * Количество',
-        'Пряжка тип I-О * Количество', 'Лак БТ-7,кг * Количество', 'Лак БТ-7,м2 * Количество', 'Лента АД1.08х20 * Количество',
-        'Пряжка тип II-А * Количество', 'Заклепка комбинированная ЗК-12-4,5 * Количество', 'Крючок * Количество',
-        'Серьга * Количество', 'Рычаг * Количество', 'Основание * Количество','Заклепка 4x24.37 * Количество',
-        'Лента 2х30 * Длина вертикальных участков', 'Лента 3х30 * Длина вертикальных участков', 'Уголок 30х30x3 * Длина вертикальных участков',
-        'Скоба навесная * Длина вертикальных участков', 'Лист АД1.Н-0.8 * Длина вертикальных участков', 'Болт М8 * Длина вертикальных участков',
-        'Болт М12 * Длина вертикальных участков', 'Гайка М8 * Длина вертикальных участков', 'Гайка М12 * Длина вертикальных участков',
-        'mati_2m100_80mm * Длина вертикальных участков', 'mati_2m100_70mm * Длина вертикальных участков',
-        'mati_2m100_60mm * Длина вертикальных участков', 'mati_2m100_50mm * Длина вертикальных участков',
-        'mati_m100_70mm * Длина вертикальных участков', 'mati_m100_60mm * Длина вертикальных участков',
-        'mati_m100_50mm * Длина вертикальных участков'].sum()
-        #mpa_slise.to_excel("mpa_1.xlsx", index=False)
+        mpa_slise.to_excel("mpa_1.xlsx", index=False)
         ### создаем список кодов KKS, типов прокладок, чтобы позже вписать в объединенные ячейки
         list_of_KKS = []
         for i in range(len(mpa_slise['Код KKS'])):
@@ -1615,7 +1666,7 @@ def output():
                 (mpa_slise['mati_2m100_70mm * Количество'][j]).round(3)) + ' м' + chr(179)
             column_g[i + 2].value = (mpa_slise['mati_2m100_60mm * Количество'][j] * 1.236).round(3)
             column_d[i + 2].value = 'Сборный'
-            column_f[i + 2].value = 'м3'
+            column_f[i + 2].value = 'м' + chr(179)
             column_e[i + 2].value = 'ГОСТ 21880-2011'
             column_c[i + 2].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=70 мм'
             column_l[i + 2].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
@@ -1627,13 +1678,17 @@ def output():
             column_c[i + 3].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=60 мм'
             column_l[i + 3].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
                 (mpa_slise['mati_2m100_50mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            column_g[i + 4].value = (mpa_slise['mati_2m100_40mm * Количество'][j] * 1.236).round(3)
+            if armatura_presence == "да":
+                column_g[i + 4].value = (mpa_slise['mati_2m100_40mm * Количество'][j] * 1.236).round(3)
+                column_l[i + 4].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+                    (mpa_slise['mati_2m100_40mm * Количество'][j]).round(3)) + ' м' + chr(179)
+            else:
+                column_g[i + 4].value = 0
+                column_l[i + 4].value = 0
             column_d[i + 4].value = 'Сборный'
             column_f[i + 4].value = 'м' + chr(179)
             column_e[i + 4].value = 'ГОСТ 21880-2011'
             column_c[i + 4].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=50 мм'
-            column_l[i + 4].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_2m100_40mm * Количество'][j]).round(3)) + ' м' + chr(179)
             column_g[i + 5].value = (mpa_slise['mati_m100_70mm * Количество'][j] * 1.236).round(3)
             column_d[i + 5].value = 'Сборный'
             column_f[i + 5].value = 'м' + chr(179)
@@ -1657,9 +1712,14 @@ def output():
                 (mpa_slise['mati_m100_50mm * Количество'][j]).round(3)) + ' м' + chr(179)
             column_c[i + 8].value = 'Cтеклоткань марки Т-23'
             column_d[i + 8].value = 'Т-23'
-            column_g[i + 8].value = ((mpa_slise['T_23_2m100_80mm'][j] + mpa_slise['T_23_2m100_70mm'][j] +
+            if armatura_presence == "да":
+                column_g[i + 8].value = ((mpa_slise['T_23_2m100_80mm'][j] + mpa_slise['T_23_2m100_70mm'][j] +
                 mpa_slise['T_23_2m100_60mm'][j] + mpa_slise['T_23_2m100_50mm'][j] + mpa_slise['T_23_2m100_40mm'][j])
                                      * 1.236).round(3)
+            else:
+                column_g[i + 8].value = ((mpa_slise['T_23_2m100_80mm'][j] + mpa_slise['T_23_2m100_70mm'][j] +
+                                          mpa_slise['T_23_2m100_60mm'][j] + mpa_slise['T_23_2m100_50mm'][j]) * 1.236).round(3)
+            column_g[i + 8].number_format = "0.000"
             column_l[i + 8].value = '(для матов в обкладках)'
             column_f[i + 8].value = 'м' + chr(178)
             column_e[i + 8].value = 'по типу ТУ 6-11-231-76'
@@ -1696,7 +1756,7 @@ def output():
             column_c[i + 13].value = 'Скоба опорная'
             column_g[i + 13].value = mpa_slise['Скоба опорная * Количество'][j].round(0)
             column_g[i + 13].number_format = "0"
-            column_e[i + 13].value = 'ГОСТ 21631-76'
+            column_e[i + 13].value = 'ГОСТ 14918-80'
             column_d[i + 13].value = 'Оцинкованная сталь'
             column_f[i + 13].value = 'шт.'
             column_c[i + 14].value = 'Пряжка тип I-О'
@@ -1733,48 +1793,58 @@ def output():
             column_f[i + 19].value = 'кг'
             column_e[i + 19].value = 'ГОСТ 5631-79'
             column_c[i + 20].value = 'Лента АД1.08х20'
-            column_g[i + 20].value = mpa_slise['Лента АД1.08х20 * Количество'][j].round(3)
+            if armatura_presence == "да":
+                column_g[i + 20].value = mpa_slise['Лента АД1.08х20 * Количество'][j].round(3)
+                column_g[i + 21].value = mpa_slise['Пряжка тип II-А * Количество'][j].round(0)
+                column_g[i + 22].value = mpa_slise['Заклепка комбинированная ЗК-12-4,5 * Количество'][j].round(0)
+                column_g[i + 23].value = mpa_slise['Крючок * Количество'][j].round(3)
+                column_g[i + 24].value = mpa_slise['Серьга * Количество'][j].round(3)
+                column_g[i + 25].value = mpa_slise['Рычаг * Количество'][j].round(3)
+                column_g[i + 26].value = mpa_slise['Основание * Количество'][j].round(3)
+                column_g[i + 27].value = mpa_slise['Заклепка 4x24.37 * Количество'][j].round(3)
+            else:
+                column_g[i + 20].value = 0
+                column_g[i + 21].value = 0
+                column_g[i + 22].value = 0
+                column_g[i + 23].value = 0
+                column_g[i + 24].value = 0
+                column_g[i + 25].value = 0
+                column_g[i + 26].value = 0
+                column_g[i + 27].value = 0
             column_d[i + 20].value = 'АД1.08х20'
             column_f[i + 20].value = 'кг'
             column_e[i + 20].value = 'ГОСТ 13726-97'
             column_c[i + 21].value = 'Пряжка тип II-А'
-            column_g[i + 21].value = mpa_slise['Пряжка тип II-А * Количество'][j].round(0)
             column_g[i + 21].number_format = "0"
             column_d[i + 21].value = 'Сборный'
             column_f[i + 21].value = 'шт.'
             column_e[i + 21].value = 'по типу ТУ 36.16.22-64-92'
             column_c[i + 22].value = 'Заклепка комбинированная ЗК-12-4,5'
-            column_g[i + 22].value = mpa_slise['Заклепка комбинированная ЗК-12-4,5 * Количество'][j].round(0)
             column_g[i + 22].number_format = "0"
             column_d[i + 22].value = 'Сборный'
             column_f[i + 22].value = 'шт.'
             column_e[i + 22].value = 'по типу ТУ 36-2088-85'
             column_c[i + 23].value = 'Крючок'
-            column_g[i + 23].value = mpa_slise['Крючок * Количество'][j].round(3)
             column_d[i + 23].value = 'Углеродистая сталь'
             column_f[i + 23].value = 'кг'
             column_e[i + 23].value = 'ГОСТ 19904-90'
             column_l[i + 23].value = 'Для крепления арматуры DN>200'
             column_c[i + 24].value = 'Серьга'
-            column_g[i + 24].value = mpa_slise['Серьга * Количество'][j].round(3)
             column_d[i + 24].value = 'Углеродистая сталь'
             column_f[i + 24].value = 'кг'
             column_e[i + 24].value = 'ГОСТ 3282-74'
             column_l[i + 24].value = 'Для крепления арматуры DN>200'
             column_c[i + 25].value = 'Рычаг'
-            column_g[i + 25].value = mpa_slise['Рычаг * Количество'][j].round(3)
             column_d[i + 25].value = 'Углеродистая сталь'
             column_f[i + 25].value = 'кг'
             column_e[i + 25].value = 'ГОСТ 19904-90'
             column_l[i + 25].value = 'Для крепления арматуры DN>200'
             column_c[i + 26].value = 'Основание'
-            column_g[i + 26].value = mpa_slise['Основание * Количество'][j].round(3)
             column_d[i + 26].value = 'Углеродистая сталь'
             column_f[i + 26].value = 'кг'
             column_e[i + 26].value = 'ГОСТ 19904-90'
             column_l[i + 26].value = 'Для крепления арматуры DN>200'
             column_c[i + 27].value = 'Заклепка 4x24.37'
-            column_g[i + 27].value = mpa_slise['Заклепка 4x24.37 * Количество'][j].round(3)
             column_d[i + 27].value = 'Сборный'
             column_f[i + 27].value = 'кг'
             column_e[i + 27].value = 'ГОСТ 10299-80'
@@ -1803,7 +1873,7 @@ def output():
             column_e[i + 30].value = 'ГОСТ 8509-93'
             column_c[i + 31].value = 'Скоба навесная'
             column_g[i + 31].value = mpa_slise['Скоба навесная * Длина вертикальных участков'][j].round(0)
-            column_d[i + 31].value = 'Алюминий'
+            column_d[i + 31].value = 'Оцинкованная сталь'
             column_f[i + 31].value = 'шт.'
             column_e[i + 31].value = 'ГОСТ 14918-80'
             column_c[i + 32].value = 'Лист АД1.Н-0.8'
@@ -1962,6 +2032,7 @@ def output():
 if __name__ == '__main__':
     start_time = time.time()
     pipe_parsed = pipelines_parse()
+    armatura_presence = armatura_presence()
     armatura_parsed = parse_armatura()
     armatura_pos1_5 = armatura_pos1_5()
     armatura_fasteners = armatura_fasteners()
