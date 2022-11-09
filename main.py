@@ -1,30 +1,29 @@
 import re
 import numpy as np
 import pandas as pd
-#from numba import jit
+# import multiprocessing as mp
+# from multiprocessing import Process
 import openpyxl
 from openpyxl.styles import Alignment, Font, Border, Side
 from math import pi
-from docx import Document
 from docxtpl import DocxTemplate
-from tkinter import *
-from tkinter import filedialog as fd
-from threading import *
+# from tkinter import *
+# from tkinter import filedialog as fd
 import time
 import snoop
 
 
 
-КодKKS = 'KUR.0130.00USY.0.TZ.PA0025'
+КодKKS = 'KUR.0130.00UNZ.SBA.TS.PA0042'
 Архивный = ' '
-дата = '01.11.2022'
+дата = '07.11.2022'
 Исполнитель = 'О.А. Тимофеева'
-Наименование_работы = 'Эстакада технологических трубопроводов (00USY)\nЭстакада к зданию 20UMA (участок 1) \nСетевая вода от здания 20UMA к зданию 00UNA'
+Наименование_работы = 'Тепловые сети промплощадки (00UNZ)\nТепловые сети по эстакаде к зданию 23UBN\nТепловая изоляция'
 Исполнитель_должн = 'Разработал инж. 2к.'
-КодKKSдокумента = 'KUR.0130.00USY.0.TK.TB0036'
-пункт_графика = '2.28.2.1.8'
-КодKKSспецификацииРД = 'KUR.0130.00USY.0.TK.TB0036.S0001'
-КодKKSспецификацииарматурыРД = 'KUR.0130.00USY.0.TK.TB0036.S0002'
+КодKKSдокумента = 'KUR.0130.00UNZ.SBA.TS.TB0057'
+пункт_графика = ' 6.11.2.7.2'
+КодKKSспецификацииРД = 'KUR.0130.00UNZ.SBA.TS.TB0057.S0001'
+КодKKSспецификацииарматурыРД = 'KUR.0130.00UNZ.SBA.TS.TB0057.S0002'
 номерМДС = ''
 
 
@@ -340,7 +339,7 @@ def pipelines_parse():
 
     my_df = (
         pd.read_excel(
-            "input/KUR.0130.00USY.0.TK.TB0036.S0001-MPA0001.xls",
+            "input/KUR.0130.00UNZ.SBA.TS.TB0057.S0001-MPA0001.xls",
             sheet_name="Sheet1",
             header=1,
             usecols=['Код KKS', 'Наименование и техническая   характеристика\n\n', 'Примечание'],
@@ -348,14 +347,15 @@ def pipelines_parse():
         .dropna(subset=['Наименование и техническая   характеристика\n\n', 'Примечание'])
         .reset_index(drop=True)
     )
-
-    drenaz_index = list(my_df["Примечание"].values).index("Трубопроводы дренажей")
-    # print(f"Индекс дренажа {drenaz_index}")
-    my_df = (
-        my_df
-        .loc[:drenaz_index - 1]
-        .reset_index(drop=True)
-    )
+    try:
+        drenaz_index = list(my_df["Примечание"].values).index("Трубопроводы дренажей")
+        my_df = (
+            my_df
+            .loc[:drenaz_index - 1]
+            .reset_index(drop=True)
+        )
+    except:
+        my_df = my_df
 
     # Парсим типы
     types_dict = find_prokladka(my_df)
@@ -429,7 +429,7 @@ def parse_armatura():
     else:
         armatura = (
             pd.read_excel(
-                "input/KUR.0130.00USY.0.TK.TB0036.S0002-MPA0001.xlsx",
+                "input/KUR.0130.00UNZ.SBA.TS.TB0057.S0002-MPA0001.xlsx",
                 sheet_name="CommonList",
                 header=1,
                 usecols=['Код KKS', 'Наименование и техническая   характеристика', 'Примечание']
@@ -787,7 +787,6 @@ def pipeline_insulation_thickness():
                pipe_parsed["protective_cover_T_23"][i] = S
 
     pipe_parsed.insert(7, "δк", thickness_list)
-    #print(thickness_list)
     return pipe_parsed
 
 #pipe_parsed = pipeline_insulation_thickness()
@@ -825,6 +824,7 @@ def pipeline_insun_preporation():
 
     ### Сопоставление толщины изоляции, диаметра трубы и типа (подающая/ надземная)
     ### Создаем новый датафрейм - объединенние парсера и крепежей для трубопроводов
+    global pipeline_with_insulation
     pipeline_with_insulation = pd.merge(pipe_parsed, pipeline_fasteners, on = ['Диаметр', 'δк'])
     pipeline_with_insulation['Лента 0,7х20 * Количество'] = pipeline_with_insulation['Количество'] * pipeline_with_insulation['Лента 0,7х20']
     pipeline_with_insulation['Лента 0,7х20 * Количество'] = pipeline_with_insulation['Лента 0,7х20 * Количество'].round(3)
@@ -926,7 +926,7 @@ def pipeline_insun_preporation():
     pipeline_with_insulation = (pipeline_with_insulation.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
     ### Сортировка по двум сразу, по возрастанию и убыванию
     del pipeline_with_insulation['index']
-    #pipeline_with_insulation.to_excel("pipelines.xlsx", index=False)
+    # pipeline_with_insulation.to_excel("pipelines.xlsx", index=False)
     return pipeline_with_insulation
 
 #pipeline_with_insulation = pipeline_insun_preporation()
@@ -1028,7 +1028,7 @@ def mpd_preporation():
     #mpd = (mpd.sort_values(by=['Тип прокладки'], ascending=[True])).reset_index()
     # del mpd['index']
     #mpd.to_excel("mpd.xlsx", index=False)
-    mpd_pipeline_with_insulation.to_excel("mpd_pipeline_with_insulation.xlsx", index=False)
+    # mpd_pipeline_with_insulation.to_excel("mpd_pipeline_with_insulation.xlsx", index=False)
     return mpd
 
 #mpd = mpd_preporation()
@@ -1059,6 +1059,415 @@ def insulation_list_prep():
 #os.mkdir(КодKKS) - создаем директорию(папку) с названием = код KKS
 @snoop
 
+def mpa_write():
+    # book = openpyxl.load_workbook("Template-MPA0001.xlsx")
+    # sheet = book['Sheet1']
+    mpa = pd.concat([pipeline_with_insulation, valves_insulation], ignore_index=True)
+    mpa = (mpa.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
+    # mpa.to_excel("mpa.xlsx", index=False)
+    if armatura_presence == "да":
+        del mpa['steel_0_5mm']
+        del mpa['Лента 0,7х20']
+        del mpa['Винт самонарезной']
+        del mpa['Проволока 2-0-Ч']
+        del mpa['Проволока 0,8-0-Ч']
+        del mpa['Скоба опорная']
+        del mpa['Пряжка тип I-О']
+        del mpa['Лак БТ-7,кг']
+        del mpa['V, м3']
+        del mpa['S, м2']
+        del mpa['steel_0_8mm']
+        del mpa['Лента АД1.08х20']
+        del mpa['Пряжка тип II-А']
+        del mpa['Заклепка комбинированная ЗК-12-4,5']
+        del mpa['Наименование и техническая характеристика']
+        del mpa['Примечание']
+        del mpa['Крючок']
+        del mpa['Серьга']
+        del mpa['Рычаг']
+        del mpa['Основание']
+        del mpa['Заклепка 4x24.37']
+        mpa_slise = mpa.groupby(['Код KKS', 'Тип прокладки', 'Система'], as_index=False)['mati_2m100_80mm * Количество',
+                                                                                         'mati_2m100_70mm * Количество', 'mati_2m100_60mm * Количество', 'mati_2m100_50mm * Количество',
+                                                                                         'mati_2m100_40mm * Количество', 'mati_m100_70mm * Количество', 'mati_m100_60mm * Количество',
+                                                                                         'mati_m100_50mm * Количество', 'protective_cover_T_23', 'steel_0_5mm * Количество', 'steel_0_8mm * Количество',
+                                                                                         'T_23_2m100_80mm', 'T_23_2m100_70mm', 'T_23_2m100_60mm', 'T_23_2m100_50mm', 'T_23_m100_70mm', 'T_23_m100_60mm',
+                                                                                         'T_23_m100_50mm', 'T_23_2m100_40mm', 'Лента 0,7х20 * Количество', 'Винт самонарезной * Количество',
+                                                                                         'Проволока 2-0-Ч * Количество', 'Проволока 0,8-0-Ч * Количество', 'Скоба опорная * Количество',
+                                                                                         'Пряжка тип I-О * Количество', 'Лак БТ-7,кг * Количество', 'Лак БТ-7,м2 * Количество', 'Лента АД1.08х20 * Количество',
+                                                                                         'Пряжка тип II-А * Количество', 'Заклепка комбинированная ЗК-12-4,5 * Количество', 'Крючок * Количество',
+                                                                                         'Серьга * Количество', 'Рычаг * Количество', 'Основание * Количество', 'Заклепка 4x24.37 * Количество',
+                                                                                         'Лента 2х30 * Длина вертикальных участков', 'Лента 3х30 * Длина вертикальных участков', 'Уголок 30х30x3 * Длина вертикальных участков',
+                                                                                         'Скоба навесная * Длина вертикальных участков', 'Лист АД1.Н-0.8 * Длина вертикальных участков', 'Болт М8 * Длина вертикальных участков',
+                                                                                         'Болт М12 * Длина вертикальных участков', 'Гайка М8 * Длина вертикальных участков', 'Гайка М12 * Длина вертикальных участков',
+                                                                                         'mati_2m100_80mm * Длина вертикальных участков', 'mati_2m100_70mm * Длина вертикальных участков',
+                                                                                         'mati_2m100_60mm * Длина вертикальных участков', 'mati_2m100_50mm * Длина вертикальных участков',
+                                                                                         'mati_m100_70mm * Длина вертикальных участков', 'mati_m100_60mm * Длина вертикальных участков',
+                                                                                         'mati_m100_50mm * Длина вертикальных участков'].sum()
+    else:
+        del mpa['steel_0_5mm']
+        del mpa['Лента 0,7х20']
+        del mpa['Винт самонарезной']
+        del mpa['Проволока 2-0-Ч']
+        del mpa['Проволока 0,8-0-Ч']
+        del mpa['Скоба опорная']
+        del mpa['Пряжка тип I-О']
+        del mpa['Лак БТ-7,кг']
+        del mpa['steel_0_8mm']
+        del mpa['Наименование и техническая характеристика']
+        del mpa['Примечание']
+        mpa_slise = mpa.groupby(['Код KKS', 'Тип прокладки', 'Система'], as_index=False)['mati_2m100_80mm * Количество',
+                                                                                         'mati_2m100_70mm * Количество', 'mati_2m100_60mm * Количество', 'mati_2m100_50mm * Количество',
+                                                                                         'mati_m100_70mm * Количество', 'mati_m100_60mm * Количество',
+                                                                                         'mati_m100_50mm * Количество', 'protective_cover_T_23', 'steel_0_5mm * Количество', 'steel_0_8mm * Количество',
+                                                                                         'T_23_2m100_80mm', 'T_23_2m100_70mm', 'T_23_2m100_60mm', 'T_23_2m100_50mm', 'T_23_m100_70mm', 'T_23_m100_60mm',
+                                                                                         'T_23_m100_50mm', 'Лента 0,7х20 * Количество', 'Винт самонарезной * Количество',
+                                                                                         'Проволока 2-0-Ч * Количество', 'Проволока 0,8-0-Ч * Количество', 'Скоба опорная * Количество',
+                                                                                         'Пряжка тип I-О * Количество', 'Лак БТ-7,кг * Количество', 'Лак БТ-7,м2 * Количество',
+                                                                                         'Лента 2х30 * Длина вертикальных участков', 'Лента 3х30 * Длина вертикальных участков', 'Уголок 30х30x3 * Длина вертикальных участков',
+                                                                                         'Скоба навесная * Длина вертикальных участков', 'Лист АД1.Н-0.8 * Длина вертикальных участков', 'Болт М8 * Длина вертикальных участков',
+                                                                                         'Болт М12 * Длина вертикальных участков', 'Гайка М8 * Длина вертикальных участков', 'Гайка М12 * Длина вертикальных участков',
+                                                                                         'mati_2m100_80mm * Длина вертикальных участков', 'mati_2m100_70mm * Длина вертикальных участков',
+                                                                                         'mati_2m100_60mm * Длина вертикальных участков', 'mati_2m100_50mm * Длина вертикальных участков',
+                                                                                         'mati_m100_70mm * Длина вертикальных участков', 'mati_m100_60mm * Длина вертикальных участков',
+                                                                                         'mati_m100_50mm * Длина вертикальных участков'].sum()
+    # mpa.to_excel("mpa.xlsx", index=False)
+    mpa = mpa.fillna(0)
+    # mpa_slise.to_excel("mpa_slise.xlsx", index=False)
+    ### создаем список кодов KKS, типов прокладок, чтобы позже вписать в объединенные ячейки
+    list_of_KKS = []
+    list_of_laying_type = []
+    list_of_systems = []
+    for i in range(len(mpa_slise['Код KKS'])):
+        list_of_KKS.append(mpa_slise['Код KKS'][i])
+    for i in range(len(mpa_slise['Тип прокладки'])):
+        list_of_laying_type.append(mpa_slise['Тип прокладки'][i])
+    for i in range(len(mpa_slise['Система'])):
+        list_of_systems.append(mpa_slise['Система'][i])
+    book = openpyxl.load_workbook("input/Templates/Template-MPA0001.xlsx")
+    l = (mpa_slise.shape[1] - 2) * mpa_slise.shape[0]
+    sheet = book['Sheet1']
+    column_a = sheet['A']
+    column_c = sheet['C']
+    column_d = sheet['D']
+    column_e = sheet['E']
+    column_f = sheet['F']
+    column_g = sheet['G']
+    column_h = sheet['H']
+    column_i = sheet['I']
+    column_j = sheet['J']
+    column_k = sheet['K']
+    column_l = sheet['L']
+    i = 3
+    j = 0
+    m = 0  # переменная для итерации по колонке количество из датафрейма pipeline_with_insulation
+    count = 0
+    while i <= l:
+        column_g[i - 1].value = mpa_slise['Код KKS'][j] + ' ' + mpa_slise['Система'][j] + "(" + \
+                                mpa_slise['Тип прокладки'][j] + ' прокладка)'
+        column_g[i].value = (mpa_slise['mati_2m100_80mm * Количество'][j] * 1.236).round(3)
+        column_d[i].value = 'Сборный'
+        column_f[i].value = 'м' + chr(179)
+        column_e[i].value = 'ГОСТ 21880-2011'
+        column_c[
+            i].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=90 мм'
+        column_l[i].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+            (mpa_slise['mati_2m100_80mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        column_g[i + 1].value = (mpa_slise['mati_2m100_70mm * Количество'][j] * 1.236).round(3)
+        column_d[i + 1].value = 'Сборный'
+        column_f[i + 1].value = 'м' + chr(179)
+        column_e[i + 1].value = 'ГОСТ 21880-2011'
+        column_c[
+            i + 1].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=80 мм'
+        column_l[i + 1].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+            (mpa_slise['mati_2m100_70mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        column_g[i + 2].value = (mpa_slise['mati_2m100_60mm * Количество'][j] * 1.236).round(3)
+        column_d[i + 2].value = 'Сборный'
+        column_f[i + 2].value = 'м' + chr(179)
+        column_e[i + 2].value = 'ГОСТ 21880-2011'
+        column_c[
+            i + 2].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=70 мм'
+        column_l[i + 2].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+            (mpa_slise['mati_2m100_60mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        column_g[i + 3].value = (mpa_slise['mati_2m100_50mm * Количество'][j] * 1.236).round(3)
+        column_d[i + 3].value = 'Сборный'
+        column_f[i + 3].value = 'м' + chr(179)
+        column_e[i + 3].value = 'ГОСТ 21880-2011'
+        column_c[
+            i + 3].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=60 мм'
+        column_l[i + 3].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+            (mpa_slise['mati_2m100_50mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        if armatura_presence == "да":
+            column_g[i + 4].value = (mpa_slise['mati_2m100_40mm * Количество'][j] * 1.236).round(3)
+            column_l[i + 4].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+                (mpa_slise['mati_2m100_40mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        else:
+            column_g[i + 4].value = 0
+            column_l[i + 4].value = 0
+        column_d[i + 4].value = 'Сборный'
+        column_f[i + 4].value = 'м' + chr(179)
+        column_e[i + 4].value = 'ГОСТ 21880-2011'
+        column_c[
+            i + 4].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=50 мм'
+        column_g[i + 5].value = (mpa_slise['mati_m100_70mm * Количество'][j] * 1.236).round(3)
+        column_d[i + 5].value = 'Сборный'
+        column_f[i + 5].value = 'м' + chr(179)
+        column_e[i + 5].value = 'ГОСТ 21880-2011'
+        column_c[i + 5].value = "Маты минераловатные прошивные марки М-100 без обкладок k=1.2,k=1.03 s=80 мм"
+        column_l[i + 5].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+            (mpa_slise['mati_m100_70mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        column_g[i + 6].value = (mpa_slise['mati_m100_60mm * Количество'][j] * 1.236).round(3)
+        column_d[i + 6].value = 'Сборный'
+        column_f[i + 6].value = 'м' + chr(179)
+        column_e[i + 6].value = 'ГОСТ 21880-2011'
+        column_c[i + 6].value = "Маты минераловатные прошивные марки М-100 без обкладок k=1.2,k=1.03 s=70 мм"
+        column_l[i + 6].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+            (mpa_slise['mati_m100_60mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        column_g[i + 7].value = (mpa_slise['mati_m100_50mm * Количество'][j] * 1.236).round(3)
+        column_d[i + 7].value = 'Сборный'
+        column_f[i + 7].value = 'м' + chr(179)
+        column_e[i + 7].value = 'ГОСТ 21880-2011'
+        column_c[i + 7].value = "Маты минераловатные прошивные марки М-100 без обкладок k=1.2,k=1.03 s=60 мм"
+        column_l[i + 7].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
+            (mpa_slise['mati_m100_50mm * Количество'][j]).round(3)) + ' м' + chr(179)
+        column_c[i + 8].value = 'Cтеклоткань марки Т-23'
+        column_d[i + 8].value = 'Т-23'
+        if armatura_presence == "да":
+            column_g[i + 8].value = ((mpa_slise['T_23_2m100_80mm'][j] + mpa_slise['T_23_2m100_70mm'][j] +
+                                      mpa_slise['T_23_2m100_60mm'][j] + mpa_slise['T_23_2m100_50mm'][j] +
+                                      mpa_slise['T_23_2m100_40mm'][j])
+                                     * 1.236).round(3)
+        else:
+            column_g[i + 8].value = ((mpa_slise['T_23_2m100_80mm'][j] + mpa_slise['T_23_2m100_70mm'][j] +
+                                      mpa_slise['T_23_2m100_60mm'][j] + mpa_slise['T_23_2m100_50mm'][j]) * 1.236).round(
+                3)
+        column_g[i + 8].number_format = "0.000"
+        column_l[i + 8].value = '(для матов в обкладках)'
+        column_f[i + 8].value = 'м' + chr(178)
+        column_e[i + 8].value = 'по типу ТУ 6-11-231-76'
+        column_c[i + 9].value = 'Cтеклоткань марки Т-23'
+        column_d[i + 9].value = 'Т-23'
+        column_g[i + 9].value = ((mpa_slise['T_23_m100_70mm'][j] + mpa_slise['T_23_m100_60mm'][j] +
+                                  mpa_slise['T_23_m100_50mm'][j]) * 1.16 * 1.236).round(3)
+        column_g[i + 9].number_format = "0.000"
+        column_l[i + 9].value = '(для матов без обкладок)'
+        column_f[i + 9].value = 'м' + chr(178)
+        column_e[i + 9].value = 'по типу ТУ 6-11-231-76'
+        column_c[i + 10].value = 'Покрытие защитное из стеклоткани марки Т-23'
+        column_g[i + 10].value = (
+                    mpa_slise['protective_cover_T_23'][j] * pipeline_with_insulation['Количество'][m] * 1.16).round(3)
+        column_g[i + 10].number_format = "0.000"
+        column_d[i + 10].value = 'Т-23'
+        column_f[i + 10].value = 'м' + chr(178)
+        column_e[i + 10].value = 'по типу ТУ 6-11-231-76'
+        column_c[i + 11].value = 'Cталь тонколистовая оцинкованная s=0.8 мм'
+        column_g[i + 11].value = (mpa_slise['steel_0_8mm * Количество'][j] * 1.22).round(3)
+        column_g[i + 11].number_format = "0.000"
+        column_l[i + 11].value = "Объем дан с учетом коэффициентов. Объем без учёта коэффициентов" + " " + \
+                                 str(mpa_slise['steel_0_8mm * Количество'][j].round(3)) + ' м' + chr(178) + ' в констр.'
+        column_d[i + 11].value = 'Оцинкованная сталь'
+        column_f[i + 11].value = 'м' + chr(178)
+        column_e[i + 11].value = 'ГОСТ 14918-80'
+        column_c[i + 12].value = 'Cталь тонколистовая оцинкованная s=0.5 мм'
+        column_g[i + 12].value = (mpa_slise['steel_0_5mm * Количество'][j] * 1.22).round(3)
+        column_g[i + 12].number_format = "0.000"
+        column_l[i + 12].value = "Объем дан с учетом коэффициентов. Объем без учёта коэффициентов" + " " + \
+                                 str(mpa_slise['steel_0_5mm * Количество'][j].round(3)) + ' м' + chr(178) + ' в констр.'
+        column_d[i + 12].value = 'Оцинкованная сталь'
+        column_f[i + 12].value = 'м' + chr(178)
+        column_e[i + 12].value = 'ГОСТ 14918-80'
+        column_c[i + 13].value = 'Скоба опорная'
+        column_g[i + 13].value = mpa_slise['Скоба опорная * Количество'][j].round(0)
+        column_g[i + 13].number_format = "0"
+        column_e[i + 13].value = 'ГОСТ 14918-80'
+        column_d[i + 13].value = 'Оцинкованная сталь'
+        column_f[i + 13].value = 'шт.'
+        column_c[i + 14].value = 'Пряжка тип I-О'
+        column_g[i + 14].value = mpa_slise['Пряжка тип I-О * Количество'][j].round(0)
+        column_g[i + 14].number_format = "0"
+        column_d[i + 14].value = 'Сборный'
+        column_f[i + 14].value = 'шт.'
+        column_e[i + 14].value = 'по типу ТУ 36.16.22-64-92'
+        column_c[i + 15].value = 'Лента стальная упаковочная 0,7х20 мм'
+        column_g[i + 15].value = mpa_slise['Лента 0,7х20 * Количество'][j].round(3)
+        column_f[i + 15].value = 'кг'
+        column_d[i + 15].value = 'Углеродистая сталь'
+        column_e[i + 15].value = 'ГОСТ 3560-73'
+        column_c[i + 16].value = 'Проволока 2-0-Ч'
+        column_g[i + 16].value = mpa_slise['Проволока 2-0-Ч * Количество'][j].round(3)
+        column_d[i + 16].value = 'Углеродистая сталь'
+        column_f[i + 16].value = 'кг'
+        column_e[i + 16].value = 'ГОСТ 3282-74'
+        column_c[i + 17].value = 'Винт самонарезающий'
+        column_g[i + 17].value = mpa_slise['Винт самонарезной * Количество'][j].round(0)
+        column_g[i + 17].number_format = "0"
+        column_d[i + 17].value = 'Сборный'
+        column_f[i + 17].value = 'шт.'
+        column_e[i + 17].value = 'ГОСТ 10621-80'
+        column_c[i + 18].value = 'Проволока 0,8-0-Ч'
+        column_g[i + 18].value = mpa_slise['Проволока 0,8-0-Ч * Количество'][j].round(3)
+        column_d[i + 18].value = 'Углеродистая сталь'
+        column_f[i + 18].value = 'кг'
+        column_e[i + 18].value = 'ГОСТ 3282-74'
+        column_c[i + 19].value = 'Лак БТ-577'
+        column_g[i + 19].value = mpa_slise['Лак БТ-7,кг * Количество'][j].round(3)
+        column_l[i + 19].value = str(mpa_slise['Лак БТ-7,м2 * Количество'][j]) + ' м' + chr(178)
+        column_d[i + 19].value = 'Сборный'
+        column_f[i + 19].value = 'кг'
+        column_e[i + 19].value = 'ГОСТ 5631-79'
+        column_c[i + 20].value = 'Лента АД1.08х20'
+        if armatura_presence == "да":
+            column_g[i + 20].value = mpa_slise['Лента АД1.08х20 * Количество'][j].round(3)
+            column_g[i + 21].value = mpa_slise['Пряжка тип II-А * Количество'][j].round(0)
+            column_g[i + 22].value = mpa_slise['Заклепка комбинированная ЗК-12-4,5 * Количество'][j].round(0)
+            column_g[i + 23].value = mpa_slise['Крючок * Количество'][j].round(3)
+            column_g[i + 24].value = mpa_slise['Серьга * Количество'][j].round(3)
+            column_g[i + 25].value = mpa_slise['Рычаг * Количество'][j].round(3)
+            column_g[i + 26].value = mpa_slise['Основание * Количество'][j].round(3)
+            column_g[i + 27].value = mpa_slise['Заклепка 4x24.37 * Количество'][j].round(3)
+        else:
+            column_g[i + 20].value = 0
+            column_g[i + 21].value = 0
+            column_g[i + 22].value = 0
+            column_g[i + 23].value = 0
+            column_g[i + 24].value = 0
+            column_g[i + 25].value = 0
+            column_g[i + 26].value = 0
+            column_g[i + 27].value = 0
+        column_d[i + 20].value = 'АД1.08х20'
+        column_f[i + 20].value = 'кг'
+        column_e[i + 20].value = 'ГОСТ 13726-97'
+        column_c[i + 21].value = 'Пряжка тип II-А'
+        column_g[i + 21].number_format = "0"
+        column_d[i + 21].value = 'Сборный'
+        column_f[i + 21].value = 'шт.'
+        column_e[i + 21].value = 'по типу ТУ 36.16.22-64-92'
+        column_c[i + 22].value = 'Заклепка комбинированная ЗК-12-4,5'
+        column_g[i + 22].number_format = "0"
+        column_d[i + 22].value = 'Сборный'
+        column_f[i + 22].value = 'шт.'
+        column_e[i + 22].value = 'по типу ТУ 36-2088-85'
+        column_c[i + 23].value = 'Крючок'
+        column_d[i + 23].value = 'Углеродистая сталь'
+        column_f[i + 23].value = 'кг'
+        column_e[i + 23].value = 'ГОСТ 19904-90'
+        column_l[i + 23].value = 'Для крепления арматуры DN>200'
+        column_c[i + 24].value = 'Серьга'
+        column_d[i + 24].value = 'Углеродистая сталь'
+        column_f[i + 24].value = 'кг'
+        column_e[i + 24].value = 'ГОСТ 3282-74'
+        column_l[i + 24].value = 'Для крепления арматуры DN>200'
+        column_c[i + 25].value = 'Рычаг'
+        column_d[i + 25].value = 'Углеродистая сталь'
+        column_f[i + 25].value = 'кг'
+        column_e[i + 25].value = 'ГОСТ 19904-90'
+        column_l[i + 25].value = 'Для крепления арматуры DN>200'
+        column_c[i + 26].value = 'Основание'
+        column_d[i + 26].value = 'Углеродистая сталь'
+        column_f[i + 26].value = 'кг'
+        column_e[i + 26].value = 'ГОСТ 19904-90'
+        column_l[i + 26].value = 'Для крепления арматуры DN>200'
+        column_c[i + 27].value = 'Заклепка 4x24.37'
+        column_d[i + 27].value = 'Сборный'
+        column_f[i + 27].value = 'кг'
+        column_e[i + 27].value = 'ГОСТ 10299-80'
+        column_l[i + 27].value = 'Для крепления арматуры DN>200'
+        column_c[i + 28].value = 'Лента 2х30 Ст3пс'
+        column_g[i + 28].value = mpa_slise['Лента 2х30 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 28].value = 'Углеродистая сталь'
+        column_f[i + 28].value = 'кг'
+        column_e[i + 28].value = 'ГОСТ 6009-74'
+        column_l[i + 28].value = str((mpa_slise['mati_2m100_80mm * Длина вертикальных участков'][j] +
+                                      mpa_slise['mati_2m100_70mm * Длина вертикальных участков'][j] +
+                                      mpa_slise['mati_2m100_60mm * Длина вертикальных участков'][j] +
+                                      mpa_slise['mati_2m100_50mm * Длина вертикальных участков'][j] +
+                                      mpa_slise['mati_m100_70mm * Длина вертикальных участков'][j] +
+                                      mpa_slise['mati_m100_60mm * Длина вертикальных участков'][j] +
+                                      mpa_slise['mati_m100_50mm * Длина вертикальных участков'][j]).round(
+            3)) + ' м' + chr(179)
+        column_c[i + 29].value = 'Лента 3х30 Ст3пс'
+        column_g[i + 29].value = mpa_slise['Лента 3х30 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 29].value = 'Углеродистая сталь'
+        column_f[i + 29].value = 'кг'
+        column_e[i + 29].value = 'ГОСТ 6009-74'
+        column_c[i + 30].value = 'Уголок 30х30x3'
+        column_g[i + 30].value = mpa_slise['Уголок 30х30x3 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 30].value = 'Углеродистая сталь'
+        column_f[i + 30].value = 'кг'
+        column_e[i + 30].value = 'ГОСТ 8509-93'
+        column_c[i + 31].value = 'Скоба навесная'
+        column_g[i + 31].value = mpa_slise['Скоба навесная * Длина вертикальных участков'][j].round(0)
+        column_g[i + 31].number_format = "0"
+        column_d[i + 31].value = 'Оцинкованная сталь'
+        column_f[i + 31].value = 'шт.'
+        column_e[i + 31].value = 'ГОСТ 14918-80'
+        column_c[i + 32].value = 'Лист АД1.Н-0.8'
+        column_g[i + 32].value = mpa_slise['Лист АД1.Н-0.8 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 32].value = 'Алюминий'
+        column_f[i + 32].value = 'кг'
+        column_e[i + 32].value = 'ГОСТ 21631-76'
+        column_c[i + 33].value = 'Болт М8x30.36.019'
+        column_g[i + 33].value = mpa_slise['Болт М8 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 33].value = 'Углеродистая сталь'
+        column_f[i + 33].value = 'кг'
+        column_e[i + 33].value = 'ГОСТ 7798-70'
+        column_c[i + 34].value = 'Болт М12x50.36.019'
+        column_g[i + 34].value = mpa_slise['Болт М12 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 34].value = 'Углеродистая сталь'
+        column_f[i + 34].value = 'кг'
+        column_e[i + 34].value = 'ГОСТ 7798-70'
+        column_c[i + 35].value = 'Гайка М8.4.019'
+        column_g[i + 35].value = mpa_slise['Гайка М8 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 35].value = 'Углеродистая сталь'
+        column_f[i + 35].value = 'кг'
+        column_e[i + 35].value = 'ГОСТ 5915-70'
+        column_c[i + 36].value = 'Гайка М12.4.019'
+        column_g[i + 36].value = mpa_slise['Гайка М12 * Длина вертикальных участков'][j].round(3)
+        column_d[i + 36].value = 'Углеродистая сталь'
+        column_f[i + 36].value = 'кг'
+        column_e[i + 36].value = 'ГОСТ 5915-70'
+
+        i += (mpa_slise.shape[1] - 2)
+        j += 1
+        m += 1
+        count += 1
+
+    ### Убираем пустые ячейки end - переменная, которая равна максимально возможному кол-ву ячеек для
+    ### одной итерации (42) * на кол-во итераций
+    end = count * 42
+    list_of_merge_rows = []
+    count_of_deleted_rows = 0
+    for cell in sheet['G'][2:end + 1]:
+        if cell.value == 0 or cell.value == None:
+            sheet.delete_rows(cell.row)
+            count_of_deleted_rows += 1
+        if type(cell.value) == str:
+            list_of_merge_rows.append(cell.row)
+            sheet.merge_cells(start_row=cell.row, start_column=1, end_row=cell.row, end_column=12)
+
+    j = 0
+    for i in range(len(list_of_merge_rows)):
+        sheet['A'][list_of_merge_rows[i] - 1].value = list_of_KKS[j] + " " + list_of_systems[j].rstrip() + \
+                                                      " (" + list_of_laying_type[j] + " прокладка)"
+        sheet['A'][list_of_merge_rows[i] - 1].font = Font(name='Arial', size=14, bold=True)
+        right = Side(border_style="medium", color='000000')
+        border = Border(right=right)
+        sheet['L'][list_of_merge_rows[i] - 1].border = border
+        sheet.row_dimensions[list_of_merge_rows[i]].height = 23
+        j += 1
+
+    n = 1
+    for cell in sheet['A'][3:(end - count_of_deleted_rows + 1)]:
+        if cell.value == None:
+            cell.value = n
+            n += 1
+
+    sheet.oddFooter.left.text = КодKKS + "-MPA0001" + '\n' + Архивный
+    return book
+    # book_mpa = mpa_write()
+    # book_mpa.save(f"output/{КодKKS}-MPA0001.xlsx")
+
+@snoop
 def output():
 
     def mpd_write():
@@ -1084,25 +1493,25 @@ def output():
         column_l = sheet['L']
         column_m = sheet['M']
         sheet.merge_cells(start_row=6, start_column=1, end_row=6, end_column=13)
-        column_a[k].value = str(mpd['Код KKS'][0]) + ' ' + str(mpd['Тип прокладки'][0]) + ' прокладка''\n'+ str(mpd['Система'][0])
+        column_a[k].value = str(mpd['Код KKS'][0]) + ' ' + str(mpd['Система'][0]) + " " + "(" + str(mpd['Тип прокладки'][0]) + ' прокладка)'
         column_a[k].alignment = Alignment(wrapText=True, horizontal="center")
         column_a[k].font = Font(name='Times New Roman', size=18, bold=True)
-        sheet.row_dimensions[k+1].height = 50
+        sheet.row_dimensions[k+1].height = 25
         previous_KKS = mpd['Код KKS'][0]
         previous_ground_type = mpd['Тип прокладки'][0]
         while i <= l:
             if j > 0 and previous_KKS != mpd['Код KKS'][j]:
                 previous_KKS = mpd['Код KKS'][j]
-                column_a[k].value = mpd['Код KKS'][j] + ' ' + mpd['Тип прокладки'][j] + ' прокладка''\n' + mpd['Система'][j]
+                column_a[k].value = mpd['Код KKS'][j] + ' ' + mpd['Система'][j] + " " + "(" + mpd['Тип прокладки'][j] + ' прокладка)'
                 column_a[k].alignment = Alignment(wrapText=True, horizontal="center")
-                sheet.row_dimensions[k+1].height = 50
+                sheet.row_dimensions[k+1].height = 25
                 column_a[k].font = Font(name='Times New Roman', size=18, bold=True)
                 sheet.merge_cells(start_row=(k + 1), start_column=1, end_row=(k + 1), end_column=13)
             if j > 0 and previous_ground_type != mpd['Тип прокладки'][j]:
                 previous_ground_type = mpd['Тип прокладки'][j]
-                column_a[k].value = mpd['Код KKS'][j] + ' ' + mpd['Тип прокладки'][j] + ' прокладка'"\n" + mpd['Система'][j]
+                column_a[k].value = mpd['Код KKS'][j] + ' ' + mpd['Система'][j] + " " + "(" + mpd['Тип прокладки'][j] + ' прокладка)'
                 column_a[k].alignment = Alignment(wrapText=True, horizontal="center")
-                sheet.row_dimensions[k+1].height = 50
+                sheet.row_dimensions[k+1].height = 25
                 column_a[k].font = Font(name='Times New Roman', size=18, bold=True)
                 sheet.merge_cells(start_row=(k + 1), start_column=1, end_row=(k + 1), end_column=13)
             column_a[i].value = i_df
@@ -1319,7 +1728,7 @@ def output():
                     column_l[i + 2].number_format = "0.000"
                     n += 1
 
-            if mpd['Диаметр'][j] > 400 and mpd['Тип прокладки'][j] == 'подземная':
+            if mpd['Диаметр'][j] > 426 and mpd['Тип прокладки'][j] == 'подземная':
                 column_f[i].value = 'Непр.'
                 column_f[i + 1].value = 'канал'
                 column_e[i].value = mpd['Температура'][j]
@@ -1346,6 +1755,14 @@ def output():
                     column_k[i + 2].number_format = "0.000"
                     column_l[i + 2].value = (column_k[i + 2].value * column_d[i].value).round(3)
                     column_l[i + 2].number_format = "0.000"
+                    column_i[i + 2].value = '-'
+                    column_i[i + 2].alignment = Alignment(horizontal="center")
+                    column_j[i + 2].value = '-'
+                    column_j[i + 2].alignment = Alignment(horizontal="center")
+                    column_k[i + 4].value = '-'
+                    column_k[i + 4].alignment = Alignment(horizontal="center")
+                    column_l[i + 4].value = '-'
+                    column_l[i + 4].alignment = Alignment(horizontal="center")
                     n += 1
                 else:
                     s = str(mpd['δк'][j] + 10)
@@ -1371,7 +1788,7 @@ def output():
                     column_l[i + 2].number_format = "0.000"
                     n += 1
 
-            if 250 <= mpd['Диаметр'][j] <= 400 and mpd['Тип прокладки'][j] == 'подземная':
+            if 250 <= mpd['Диаметр'][j] <= 426 and mpd['Тип прокладки'][j] == 'подземная':
                 column_f[i].value = 'Непр.'
                 column_f[i + 1].value = 'канал'
                 column_e[i].value = mpd['Температура'][j]
@@ -1398,6 +1815,14 @@ def output():
                     column_k[i + 2].number_format = "0.000"
                     column_l[i + 2].value = (column_k[i + 2].value * column_d[i].value).round(3)
                     column_l[i + 2].number_format = "0.000"
+                    column_i[i + 2].value = '-'
+                    column_i[i + 2].alignment = Alignment(horizontal="center")
+                    column_j[i + 2].value = '-'
+                    column_j[i + 2].alignment = Alignment(horizontal="center")
+                    column_k[i + 4].value = '-'
+                    column_k[i + 4].alignment = Alignment(horizontal="center")
+                    column_l[i + 4].value = '-'
+                    column_l[i + 4].alignment = Alignment(horizontal="center")
                     n += 1
                 else:
                     s = str(mpd['δк'][j] + 10)
@@ -1434,20 +1859,31 @@ def output():
                     column_d[i].number_format = "0.000"
                     column_d[i].alignment = Alignment(horizontal="center")
                     column_g[i + 1].value = 'М-100 без обкладок' + ' ' * 25 + 's = ' + s + ' мм'
+                    column_g[i + 1].alignment = Alignment(horizontal="left")
+                    column_g[i + 2].value = 'Покрытие защитное из стеклоткани'
                     column_g[i + 2].alignment = Alignment(horizontal="left")
-                    column_g[i + 3].value = 'Покрытие защитное из стеклоткани'
+                    column_g[i + 3].value = 'марки T-23'
                     column_g[i + 3].alignment = Alignment(horizontal="left")
-                    column_g[i + 4].value = 'марки T-23'
-                    column_g[i + 4].alignment = Alignment(horizontal="left")
-                    column_h[i + 2].value = mpd['δк'][j]
-                    column_i[i + 4].value = mpd['Покрытие защ.Т-23'][j]
-                    column_i[i + 4].number_format = "0.000"
-                    column_j[i + 4].value = (mpd['Покрытие защ.Т-23'][j] * mpd['Количество'][j]).round(3)
-                    column_j[i + 4].number_format = "0.000"
-                    column_k[i + 2].value = mpd['Маты М-100 60мм'][j]
-                    column_k[i + 2].number_format = "0.000"
-                    column_l[i + 2].value = (column_k[i + 2].value * column_d[i].value).round(3)
-                    column_l[i + 2].number_format = "0.000"
+                    column_h[i + 1].value = mpd['δк'][j]
+                    column_h[i + 1].number_format = "0"
+                    column_i[i + 3].value = mpd['Покрытие защ.Т-23'][j]
+                    column_i[i + 3].number_format = "0.000"
+                    column_j[i + 3].value = (mpd['Покрытие защ.Т-23'][j] * mpd['Количество'][j]).round(3)
+                    column_j[i + 3].number_format = "0.000"
+                    column_k[i + 1].value = mpd['Маты М-100 60мм'][j]
+                    column_k[i + 1].number_format = "0.000"
+                    column_k[i + 1].alignment = Alignment(horizontal="center")
+                    column_l[i + 1].value = (column_k[i + 1].value * column_d[i].value).round(3)
+                    column_l[i + 1].number_format = "0.000"
+                    column_l[i + 1].alignment = Alignment(horizontal="center")
+                    column_i[i + 1].value = '-'
+                    column_i[i + 1].alignment = Alignment(horizontal="center")
+                    column_j[i + 1].value = '-'
+                    column_j[i + 1].alignment = Alignment(horizontal="center")
+                    column_k[i + 3].value = '-'
+                    column_k[i + 3].alignment = Alignment(horizontal="center")
+                    column_l[i + 3].value = '-'
+                    column_l[i + 3].alignment = Alignment(horizontal="center")
                     n += 1
                 else:
                     s = str(mpd['δк'][j] + 10)
@@ -1489,17 +1925,26 @@ def output():
                     column_g[i + 2].alignment = Alignment(horizontal="left")
                     column_g[i + 3].value = 'марки T-23'
                     column_g[i + 3].alignment = Alignment(horizontal="left")
-                    column_h[i + 2].value = mpd['δк'][j]
-                    column_i[i + 4].value = mpd['Покрытие защ.Т-23'][j]
-                    column_i[i + 4].number_format = "0.000"
-                    column_j[i + 4].value = (mpd['Покрытие защ.Т-23'][j] * mpd['Количество'][j]).round(3)
-                    column_j[i + 4].number_format = "0.000"
-                    column_k[i + 2].value = mpd['Маты М-100 50мм'][j]
-                    column_k[i + 2].number_format = "0.000"
-                    column_k[i + 2].alignment = Alignment(horizontal="center")
-                    column_l[i + 2].value = (column_k[i + 2].value * column_d[i].value).round(3)
-                    column_l[i + 2].number_format = "0.000"
-                    column_l[i + 2].alignment = Alignment(horizontal="center")
+                    column_h[i + 1].value = mpd['δк'][j]
+                    column_h[i + 1].number_format = "0"
+                    column_i[i + 3].value = mpd['Покрытие защ.Т-23'][j]
+                    column_i[i + 3].number_format = "0.000"
+                    column_j[i + 3].value = (mpd['Покрытие защ.Т-23'][j] * mpd['Количество'][j]).round(3)
+                    column_j[i + 3].number_format = "0.000"
+                    column_k[i + 1].value = mpd['Маты М-100 50мм'][j]
+                    column_k[i + 1].number_format = "0.000"
+                    column_k[i + 1].alignment = Alignment(horizontal="center")
+                    column_l[i + 1].value = (column_k[i + 1].value * column_d[i].value).round(3)
+                    column_l[i + 1].number_format = "0.000"
+                    column_l[i + 1].alignment = Alignment(horizontal="center")
+                    column_i[i + 1].value = '-'
+                    column_i[i + 1].alignment = Alignment(horizontal="center")
+                    column_j[i + 1].value = '-'
+                    column_j[i + 1].alignment = Alignment(horizontal="center")
+                    column_k[i + 3].value = '-'
+                    column_k[i + 3].alignment = Alignment(horizontal="center")
+                    column_l[i + 3].value = '-'
+                    column_l[i + 3].alignment = Alignment(horizontal="center")
                     n += 1
                 else:
                     s = str(mpd['δк'][j] + 10)
@@ -1526,14 +1971,6 @@ def output():
 
             column_g[i].value = 'Маты минераловатные прошивные марки'
             column_g[i].alignment = Alignment(horizontal="left")
-            column_i[i + 2].value = '-'
-            column_i[i + 2].alignment = Alignment(horizontal="center")
-            column_j[i + 2].value = '-'
-            column_j[i + 2].alignment = Alignment(horizontal="center")
-            column_k[i + 4].value = '-'
-            column_k[i + 4].alignment = Alignment(horizontal="center")
-            column_l[i + 4].value = '-'
-            column_l[i + 4].alignment = Alignment(horizontal="center")
 
             i += 6
             i_df += 1
@@ -1549,394 +1986,9 @@ def output():
     ### Делаем вывод
     ### Вывод в ведомость MPA0001
 
-    def mpa_write():
-        # book = openpyxl.load_workbook("Template-MPA0001.xlsx")
-        # sheet = book['Sheet1']
-        mpa = pd.concat([pipeline_with_insulation, valves_insulation], ignore_index=True)
-        mpa = (mpa.sort_values(by=['Код KKS', 'Тип прокладки', 'Диаметр'], ascending=[True, True, False])).reset_index()
-        # mpa.to_excel("mpa.xlsx", index=False)
-        if armatura_presence == "да":
-            del mpa['steel_0_5mm']
-            del mpa['Лента 0,7х20']
-            del mpa['Винт самонарезной']
-            del mpa['Проволока 2-0-Ч']
-            del mpa['Проволока 0,8-0-Ч']
-            del mpa['Скоба опорная']
-            del mpa['Пряжка тип I-О']
-            del mpa['Лак БТ-7,кг']
-            del mpa['V, м3']
-            del mpa['S, м2']
-            del mpa['steel_0_8mm']
-            del mpa['Лента АД1.08х20']
-            del mpa['Пряжка тип II-А']
-            del mpa['Заклепка комбинированная ЗК-12-4,5']
-            del mpa['Наименование и техническая характеристика']
-            del mpa['Примечание']
-            del mpa['Крючок']
-            del mpa['Серьга']
-            del mpa['Рычаг']
-            del mpa['Основание']
-            del mpa['Заклепка 4x24.37']
-            mpa_slise = mpa.groupby(['Код KKS', 'Тип прокладки'], as_index=False)['mati_2m100_80mm * Количество',
-                                                                                  'mati_2m100_70mm * Количество', 'mati_2m100_60mm * Количество', 'mati_2m100_50mm * Количество',
-                                                                                  'mati_2m100_40mm * Количество', 'mati_m100_70mm * Количество', 'mati_m100_60mm * Количество',
-                                                                                  'mati_m100_50mm * Количество', 'protective_cover_T_23', 'steel_0_5mm * Количество', 'steel_0_8mm * Количество',
-                                                                                  'T_23_2m100_80mm', 'T_23_2m100_70mm', 'T_23_2m100_60mm', 'T_23_2m100_50mm', 'T_23_m100_70mm', 'T_23_m100_60mm',
-                                                                                  'T_23_m100_50mm', 'T_23_2m100_40mm', 'Лента 0,7х20 * Количество', 'Винт самонарезной * Количество',
-                                                                                  'Проволока 2-0-Ч * Количество', 'Проволока 0,8-0-Ч * Количество', 'Скоба опорная * Количество',
-                                                                                  'Пряжка тип I-О * Количество', 'Лак БТ-7,кг * Количество', 'Лак БТ-7,м2 * Количество', 'Лента АД1.08х20 * Количество',
-                                                                                  'Пряжка тип II-А * Количество', 'Заклепка комбинированная ЗК-12-4,5 * Количество', 'Крючок * Количество',
-                                                                                  'Серьга * Количество', 'Рычаг * Количество', 'Основание * Количество', 'Заклепка 4x24.37 * Количество',
-                                                                                  'Лента 2х30 * Длина вертикальных участков', 'Лента 3х30 * Длина вертикальных участков', 'Уголок 30х30x3 * Длина вертикальных участков',
-                                                                                  'Скоба навесная * Длина вертикальных участков', 'Лист АД1.Н-0.8 * Длина вертикальных участков', 'Болт М8 * Длина вертикальных участков',
-                                                                                  'Болт М12 * Длина вертикальных участков', 'Гайка М8 * Длина вертикальных участков', 'Гайка М12 * Длина вертикальных участков',
-                                                                                  'mati_2m100_80mm * Длина вертикальных участков', 'mati_2m100_70mm * Длина вертикальных участков',
-                                                                                  'mati_2m100_60mm * Длина вертикальных участков', 'mati_2m100_50mm * Длина вертикальных участков',
-                                                                                  'mati_m100_70mm * Длина вертикальных участков', 'mati_m100_60mm * Длина вертикальных участков',
-                                                                                  'mati_m100_50mm * Длина вертикальных участков'].sum()
-        else:
-            del mpa['steel_0_5mm']
-            del mpa['Лента 0,7х20']
-            del mpa['Винт самонарезной']
-            del mpa['Проволока 2-0-Ч']
-            del mpa['Проволока 0,8-0-Ч']
-            del mpa['Скоба опорная']
-            del mpa['Пряжка тип I-О']
-            del mpa['Лак БТ-7,кг']
-            del mpa['steel_0_8mm']
-            del mpa['Наименование и техническая характеристика']
-            del mpa['Примечание']
-            mpa_slise = mpa.groupby(['Код KKS', 'Тип прокладки'], as_index=False)['mati_2m100_80mm * Количество',
-                                                                                  'mati_2m100_70mm * Количество', 'mati_2m100_60mm * Количество', 'mati_2m100_50mm * Количество',
-                                                                                  'mati_m100_70mm * Количество', 'mati_m100_60mm * Количество',
-                                                                                  'mati_m100_50mm * Количество', 'protective_cover_T_23', 'steel_0_5mm * Количество', 'steel_0_8mm * Количество',
-                                                                                  'T_23_2m100_80mm', 'T_23_2m100_70mm', 'T_23_2m100_60mm', 'T_23_2m100_50mm', 'T_23_m100_70mm', 'T_23_m100_60mm',
-                                                                                  'T_23_m100_50mm', 'Лента 0,7х20 * Количество', 'Винт самонарезной * Количество',
-                                                                                  'Проволока 2-0-Ч * Количество', 'Проволока 0,8-0-Ч * Количество', 'Скоба опорная * Количество',
-                                                                                  'Пряжка тип I-О * Количество', 'Лак БТ-7,кг * Количество', 'Лак БТ-7,м2 * Количество',
-                                                                                  'Лента 2х30 * Длина вертикальных участков', 'Лента 3х30 * Длина вертикальных участков', 'Уголок 30х30x3 * Длина вертикальных участков',
-                                                                                  'Скоба навесная * Длина вертикальных участков', 'Лист АД1.Н-0.8 * Длина вертикальных участков', 'Болт М8 * Длина вертикальных участков',
-                                                                                  'Болт М12 * Длина вертикальных участков', 'Гайка М8 * Длина вертикальных участков', 'Гайка М12 * Длина вертикальных участков',
-                                                                                  'mati_2m100_80mm * Длина вертикальных участков', 'mati_2m100_70mm * Длина вертикальных участков',
-                                                                                  'mati_2m100_60mm * Длина вертикальных участков', 'mati_2m100_50mm * Длина вертикальных участков',
-                                                                                  'mati_m100_70mm * Длина вертикальных участков', 'mati_m100_60mm * Длина вертикальных участков',
-                                                                                  'mati_m100_50mm * Длина вертикальных участков'].sum()
-        #mpa.to_excel("mpa.xlsx", index=False)
-        mpa = mpa.fillna(0)
-        mpa_slise.to_excel("mpa_1.xlsx", index=False)
-        ### создаем список кодов KKS, типов прокладок, чтобы позже вписать в объединенные ячейки
-        list_of_KKS = []
-        for i in range(len(mpa_slise['Код KKS'])):
-            list_of_KKS.append(mpa_slise['Код KKS'][i])
-        list_of_laying_type = []
-        for i in range(len(mpa_slise['Тип прокладки'])):
-            list_of_laying_type.append(mpa_slise['Тип прокладки'][i])
-        book = openpyxl.load_workbook("input/Templates/Template-MPA0001.xlsx")
-        l = (mpa_slise.shape[1] - 2) * mpa_slise.shape[0]
-        sheet = book['Sheet1']
-        column_a = sheet['A']
-        column_c = sheet['C']
-        column_d = sheet['D']
-        column_e = sheet['E']
-        column_f = sheet['F']
-        column_g = sheet['G']
-        column_h = sheet['H']
-        column_i = sheet['I']
-        column_j = sheet['J']
-        column_k = sheet['K']
-        column_l = sheet['L']
-        i = 3
-        j = 0
-        m = 0 # переменная для итерации по колонке количество из датафрейма pipeline_with_insulation
-        while i <= l:
-            column_g[i-1].value = mpa_slise['Код KKS'][j] + ' ' + mpa_slise['Тип прокладки'][j] + ' прокладка'
-            column_g[i].value = (mpa_slise['mati_2m100_80mm * Количество'][j] * 1.236).round(3)
-            column_d[i].value = 'Сборный'
-            column_f[i].value = 'м' + chr(179)
-            column_e[i].value = 'ГОСТ 21880-2011'
-            column_c[i].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=90 мм'
-            column_l[i].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_2m100_80mm * Количество'][j]).round(3)) +' м' + chr(179)
-            column_g[i + 1].value = (mpa_slise['mati_2m100_70mm * Количество'][j] * 1.236).round(3)
-            column_d[i + 1].value = 'Сборный'
-            column_f[i + 1].value = 'м' + chr(179)
-            column_e[i + 1].value = 'ГОСТ 21880-2011'
-            column_c[i + 1].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=80 мм'
-            column_l[i + 1].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_2m100_70mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            column_g[i + 2].value = (mpa_slise['mati_2m100_60mm * Количество'][j] * 1.236).round(3)
-            column_d[i + 2].value = 'Сборный'
-            column_f[i + 2].value = 'м' + chr(179)
-            column_e[i + 2].value = 'ГОСТ 21880-2011'
-            column_c[i + 2].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=70 мм'
-            column_l[i + 2].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_2m100_60mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            column_g[i + 3].value = (mpa_slise['mati_2m100_50mm * Количество'][j] * 1.236).round(3)
-            column_d[i + 3].value = 'Сборный'
-            column_f[i + 3].value = 'м' + chr(179)
-            column_e[i + 3].value = 'ГОСТ 21880-2011'
-            column_c[i + 3].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=60 мм'
-            column_l[i + 3].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_2m100_50mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            if armatura_presence == "да":
-                column_g[i + 4].value = (mpa_slise['mati_2m100_40mm * Количество'][j] * 1.236).round(3)
-                column_l[i + 4].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                    (mpa_slise['mati_2m100_40mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            else:
-                column_g[i + 4].value = 0
-                column_l[i + 4].value = 0
-            column_d[i + 4].value = 'Сборный'
-            column_f[i + 4].value = 'м' + chr(179)
-            column_e[i + 4].value = 'ГОСТ 21880-2011'
-            column_c[i + 4].value = 'Маты минераловатные прошивные марки 2М-100 в обкладке из стеклоткани марки Т-23 со всех сторон k=1.2,k=1.03 s=50 мм'
-            column_g[i + 5].value = (mpa_slise['mati_m100_70mm * Количество'][j] * 1.236).round(3)
-            column_d[i + 5].value = 'Сборный'
-            column_f[i + 5].value = 'м' + chr(179)
-            column_e[i + 5].value = 'ГОСТ 21880-2011'
-            column_c[i + 5].value = "Маты минераловатные прошивные марки М-100 без обкладок k=1.2,k=1.03 s=80 мм"
-            column_l[i + 5].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_m100_70mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            column_g[i + 6].value = (mpa_slise['mati_m100_60mm * Количество'][j] * 1.236).round(3)
-            column_d[i + 6].value = 'Сборный'
-            column_f[i + 6].value = 'м' + chr(179)
-            column_e[i + 6].value = 'ГОСТ 21880-2011'
-            column_c[i + 6].value = "Маты минераловатные прошивные марки М-100 без обкладок k=1.2,k=1.03 s=70 мм"
-            column_l[i + 6].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_m100_60mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            column_g[i + 7].value = (mpa_slise['mati_m100_50mm * Количество'][j] * 1.236).round(3)
-            column_d[i + 7].value = 'Сборный'
-            column_f[i + 7].value = 'м' + chr(179)
-            column_e[i + 7].value = 'ГОСТ 21880-2011'
-            column_c[i + 7].value = "Маты минераловатные прошивные марки М-100 без обкладок k=1.2,k=1.03 s=60 мм"
-            column_l[i + 7].value = 'Объем дан с учетом коэффициентов. Объем без учёта коэффициентов' + ' ' + str(
-                (mpa_slise['mati_m100_50mm * Количество'][j]).round(3)) + ' м' + chr(179)
-            column_c[i + 8].value = 'Cтеклоткань марки Т-23'
-            column_d[i + 8].value = 'Т-23'
-            if armatura_presence == "да":
-                column_g[i + 8].value = ((mpa_slise['T_23_2m100_80mm'][j] + mpa_slise['T_23_2m100_70mm'][j] +
-                mpa_slise['T_23_2m100_60mm'][j] + mpa_slise['T_23_2m100_50mm'][j] + mpa_slise['T_23_2m100_40mm'][j])
-                                     * 1.236).round(3)
-            else:
-                column_g[i + 8].value = ((mpa_slise['T_23_2m100_80mm'][j] + mpa_slise['T_23_2m100_70mm'][j] +
-                                          mpa_slise['T_23_2m100_60mm'][j] + mpa_slise['T_23_2m100_50mm'][j]) * 1.236).round(3)
-            column_g[i + 8].number_format = "0.000"
-            column_l[i + 8].value = '(для матов в обкладках)'
-            column_f[i + 8].value = 'м' + chr(178)
-            column_e[i + 8].value = 'по типу ТУ 6-11-231-76'
-            column_c[i + 9].value = 'Cтеклоткань марки Т-23'
-            column_d[i + 9].value = 'Т-23'
-            column_g[i + 9].value = ((mpa_slise['T_23_m100_70mm'][j] + mpa_slise['T_23_m100_60mm'][j] +
-                                     mpa_slise['T_23_m100_50mm'][j]) * 1.16 * 1.236).round(3)
-            column_g[i + 9].number_format = "0.000"
-            column_l[i + 9].value = '(для матов без обкладок)'
-            column_f[i + 9].value = 'м' + chr(178)
-            column_e[i + 9].value = 'по типу ТУ 6-11-231-76'
-            column_c[i + 10].value = 'Покрытие защитное из стеклоткани марки Т-23'
-            column_g[i + 10].value = (mpa_slise['protective_cover_T_23'][j] * pipeline_with_insulation['Количество'][m] * 1.16).round(3)
-            column_g[i + 10].number_format = "0.000"
-            column_d[i + 10].value = 'Т-23'
-            column_f[i + 10].value = 'м' + chr(178)
-            column_e[i + 10].value = 'по типу ТУ 6-11-231-76'
-            column_c[i + 11].value = 'Cталь тонколистовая оцинкованная s=0.8 мм'
-            column_g[i + 11].value = (mpa_slise['steel_0_8mm * Количество'][j] * 1.22).round(3)
-            column_g[i + 11].number_format = "0.000"
-            column_l[i + 11].value = "Объем дан с учетом коэффициентов. Объем без учёта коэффициентов" + " " +\
-                                     str(mpa_slise['steel_0_8mm * Количество'][j].round(3)) + ' м' + chr(178) +' в констр.'
-            column_d[i + 11].value = 'Оцинкованная сталь'
-            column_f[i + 11].value = 'м' + chr(178)
-            column_e[i + 11].value = 'ГОСТ 14918-80'
-            column_c[i + 12].value = 'Cталь тонколистовая оцинкованная s=0.5 мм'
-            column_g[i + 12].value = (mpa_slise['steel_0_5mm * Количество'][j] * 1.22).round(3)
-            column_g[i + 12].number_format = "0.000"
-            column_l[i + 12].value = "Объем дан с учетом коэффициентов. Объем без учёта коэффициентов" + " " + \
-                                     str(mpa_slise['steel_0_5mm * Количество'][j].round(3)) + ' м' + chr(178) +' в констр.'
-            column_d[i + 12].value = 'Оцинкованная сталь'
-            column_f[i + 12].value = 'м' + chr(178)
-            column_e[i + 12].value = 'ГОСТ 14918-80'
-            column_c[i + 13].value = 'Скоба опорная'
-            column_g[i + 13].value = mpa_slise['Скоба опорная * Количество'][j].round(0)
-            column_g[i + 13].number_format = "0"
-            column_e[i + 13].value = 'ГОСТ 14918-80'
-            column_d[i + 13].value = 'Оцинкованная сталь'
-            column_f[i + 13].value = 'шт.'
-            column_c[i + 14].value = 'Пряжка тип I-О'
-            column_g[i + 14].value = mpa_slise['Пряжка тип I-О * Количество'][j].round(0)
-            column_g[i + 14].number_format = "0"
-            column_d[i + 14].value = 'Сборный'
-            column_f[i + 14].value = 'шт.'
-            column_e[i + 14].value = 'по типу ТУ 36.16.22-64-92'
-            column_c[i + 15].value = 'Лента стальная упаковочная 0,7х20 мм'
-            column_g[i + 15].value = mpa_slise['Лента 0,7х20 * Количество'][j].round(3)
-            column_f[i + 15].value = 'кг'
-            column_d[i + 15].value = 'Углеродистая сталь'
-            column_e[i + 15].value = 'ГОСТ 3560-73'
-            column_c[i + 16].value = 'Проволока 2-0-Ч'
-            column_g[i + 16].value = mpa_slise['Проволока 2-0-Ч * Количество'][j].round(3)
-            column_d[i + 16].value = 'Углеродистая сталь'
-            column_f[i + 16].value = 'кг'
-            column_e[i + 16].value = 'ГОСТ 3282-74'
-            column_c[i + 17].value = 'Винт самонарезающий'
-            column_g[i + 17].value = mpa_slise['Винт самонарезной * Количество'][j].round(0)
-            column_g[i + 17].number_format = "0"
-            column_d[i + 17].value = 'Сборный'
-            column_f[i + 17].value = 'шт.'
-            column_e[i + 17].value = 'ГОСТ 10621-80'
-            column_c[i + 18].value = 'Проволока 0,8-0-Ч'
-            column_g[i + 18].value = mpa_slise['Проволока 0,8-0-Ч * Количество'][j].round(3)
-            column_d[i + 18].value = 'Углеродистая сталь'
-            column_f[i + 18].value = 'кг'
-            column_e[i + 18].value = 'ГОСТ 3282-74'
-            column_c[i + 19].value = 'Лак БТ-577'
-            column_g[i + 19].value = mpa_slise['Лак БТ-7,кг * Количество'][j].round(3)
-            column_l[i + 19].value = str(mpa_slise['Лак БТ-7,м2 * Количество'][j]) + ' м' + chr(178)
-            column_d[i + 19].value = 'Сборный'
-            column_f[i + 19].value = 'кг'
-            column_e[i + 19].value = 'ГОСТ 5631-79'
-            column_c[i + 20].value = 'Лента АД1.08х20'
-            if armatura_presence == "да":
-                column_g[i + 20].value = mpa_slise['Лента АД1.08х20 * Количество'][j].round(3)
-                column_g[i + 21].value = mpa_slise['Пряжка тип II-А * Количество'][j].round(0)
-                column_g[i + 22].value = mpa_slise['Заклепка комбинированная ЗК-12-4,5 * Количество'][j].round(0)
-                column_g[i + 23].value = mpa_slise['Крючок * Количество'][j].round(3)
-                column_g[i + 24].value = mpa_slise['Серьга * Количество'][j].round(3)
-                column_g[i + 25].value = mpa_slise['Рычаг * Количество'][j].round(3)
-                column_g[i + 26].value = mpa_slise['Основание * Количество'][j].round(3)
-                column_g[i + 27].value = mpa_slise['Заклепка 4x24.37 * Количество'][j].round(3)
-            else:
-                column_g[i + 20].value = 0
-                column_g[i + 21].value = 0
-                column_g[i + 22].value = 0
-                column_g[i + 23].value = 0
-                column_g[i + 24].value = 0
-                column_g[i + 25].value = 0
-                column_g[i + 26].value = 0
-                column_g[i + 27].value = 0
-            column_d[i + 20].value = 'АД1.08х20'
-            column_f[i + 20].value = 'кг'
-            column_e[i + 20].value = 'ГОСТ 13726-97'
-            column_c[i + 21].value = 'Пряжка тип II-А'
-            column_g[i + 21].number_format = "0"
-            column_d[i + 21].value = 'Сборный'
-            column_f[i + 21].value = 'шт.'
-            column_e[i + 21].value = 'по типу ТУ 36.16.22-64-92'
-            column_c[i + 22].value = 'Заклепка комбинированная ЗК-12-4,5'
-            column_g[i + 22].number_format = "0"
-            column_d[i + 22].value = 'Сборный'
-            column_f[i + 22].value = 'шт.'
-            column_e[i + 22].value = 'по типу ТУ 36-2088-85'
-            column_c[i + 23].value = 'Крючок'
-            column_d[i + 23].value = 'Углеродистая сталь'
-            column_f[i + 23].value = 'кг'
-            column_e[i + 23].value = 'ГОСТ 19904-90'
-            column_l[i + 23].value = 'Для крепления арматуры DN>200'
-            column_c[i + 24].value = 'Серьга'
-            column_d[i + 24].value = 'Углеродистая сталь'
-            column_f[i + 24].value = 'кг'
-            column_e[i + 24].value = 'ГОСТ 3282-74'
-            column_l[i + 24].value = 'Для крепления арматуры DN>200'
-            column_c[i + 25].value = 'Рычаг'
-            column_d[i + 25].value = 'Углеродистая сталь'
-            column_f[i + 25].value = 'кг'
-            column_e[i + 25].value = 'ГОСТ 19904-90'
-            column_l[i + 25].value = 'Для крепления арматуры DN>200'
-            column_c[i + 26].value = 'Основание'
-            column_d[i + 26].value = 'Углеродистая сталь'
-            column_f[i + 26].value = 'кг'
-            column_e[i + 26].value = 'ГОСТ 19904-90'
-            column_l[i + 26].value = 'Для крепления арматуры DN>200'
-            column_c[i + 27].value = 'Заклепка 4x24.37'
-            column_d[i + 27].value = 'Сборный'
-            column_f[i + 27].value = 'кг'
-            column_e[i + 27].value = 'ГОСТ 10299-80'
-            column_l[i + 27].value = 'Для крепления арматуры DN>200'
-            column_c[i + 28].value = 'Лента 2х30 Ст3пс'
-            column_g[i + 28].value = mpa_slise['Лента 2х30 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 28].value = 'Углеродистая сталь'
-            column_f[i + 28].value = 'кг'
-            column_e[i + 28].value = 'ГОСТ 6009-74'
-            column_l[i + 28].value = str((mpa_slise['mati_2m100_80mm * Длина вертикальных участков'][j] +
-                                      mpa_slise['mati_2m100_70mm * Длина вертикальных участков'][j] +
-                                      mpa_slise['mati_2m100_60mm * Длина вертикальных участков'][j] +
-                                      mpa_slise['mati_2m100_50mm * Длина вертикальных участков'][j] +
-                                      mpa_slise['mati_m100_70mm * Длина вертикальных участков'][j] +
-                                      mpa_slise['mati_m100_60mm * Длина вертикальных участков'][j] +
-                                      mpa_slise['mati_m100_50mm * Длина вертикальных участков'][j]).round(3)) + ' м' + chr(179)
-            column_c[i + 29].value = 'Лента 3х30 Ст3пс'
-            column_g[i + 29].value = mpa_slise['Лента 3х30 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 29].value = 'Углеродистая сталь'
-            column_f[i + 29].value = 'кг'
-            column_e[i + 29].value = 'ГОСТ 6009-74'
-            column_c[i + 30].value = 'Уголок 30х30x3'
-            column_g[i + 30].value = mpa_slise['Уголок 30х30x3 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 30].value = 'Углеродистая сталь'
-            column_f[i + 30].value = 'кг'
-            column_e[i + 30].value = 'ГОСТ 8509-93'
-            column_c[i + 31].value = 'Скоба навесная'
-            column_g[i + 31].value = mpa_slise['Скоба навесная * Длина вертикальных участков'][j].round(0)
-            column_d[i + 31].value = 'Оцинкованная сталь'
-            column_f[i + 31].value = 'шт.'
-            column_e[i + 31].value = 'ГОСТ 14918-80'
-            column_c[i + 32].value = 'Лист АД1.Н-0.8'
-            column_g[i + 32].value = mpa_slise['Лист АД1.Н-0.8 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 32].value = 'Алюминий'
-            column_f[i + 32].value = 'кг'
-            column_e[i + 32].value = 'ГОСТ 21631-76'
-            column_c[i + 33].value = 'Болт М8x30.36.019'
-            column_g[i + 33].value = mpa_slise['Болт М8 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 33].value = 'Углеродистая сталь'
-            column_f[i + 33].value = 'кг'
-            column_e[i + 33].value = 'ГОСТ 7798-70'
-            column_c[i + 34].value = 'Болт М12x50.36.019'
-            column_g[i + 34].value = mpa_slise['Болт М12 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 34].value = 'Углеродистая сталь'
-            column_f[i + 34].value = 'кг'
-            column_e[i + 34].value = 'ГОСТ 7798-70'
-            column_c[i + 35].value = 'Гайка М8.4.019'
-            column_g[i + 35].value = mpa_slise['Гайка М8 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 35].value = 'Углеродистая сталь'
-            column_f[i + 35].value = 'кг'
-            column_e[i + 35].value = 'ГОСТ 5915-70'
-            column_c[i + 36].value = 'Гайка М12.4.019'
-            column_g[i + 36].value = mpa_slise['Гайка М12 * Длина вертикальных участков'][j].round(3)
-            column_d[i + 36].value = 'Углеродистая сталь'
-            column_f[i + 36].value = 'кг'
-            column_e[i + 36].value = 'ГОСТ 5915-70'
 
-            i += (mpa_slise.shape[1] - 2)
-            j += 1
-            m += 1
-            a = i
-        ### Убираем пустые ячейки
 
-        list_of_merge_rows = []
-        n = 1
-        for cell in sheet['G'][2:a + 1]:
-            if cell.value == 0 or cell.value == None:
-                sheet.delete_rows(cell.row)
-            if type(cell.value) == str:
-                list_of_merge_rows.append(cell.row)
-                sheet.merge_cells(start_row=cell.row, start_column=1, end_row=cell.row, end_column=12)
-        j = 0
-        for i in range(len(list_of_merge_rows)):
-            sheet['A'][list_of_merge_rows[i] - 1].value = list_of_KKS[j] + " " +list_of_laying_type[j] + " прокладка"
-            sheet['A'][list_of_merge_rows[i] - 1].font = Font(name='Arial', size=14, bold=True)
-            right = Side(border_style="medium", color='000000')
-            border = Border(right = right)
-            sheet['L'][list_of_merge_rows[i] -1].border = border
-            sheet.row_dimensions[list_of_merge_rows[i]].height = 23
-            j += 1
-        # print(sheet.max_row)
-        n = 1
-        for cell in sheet['A'][3:a + 1]:
-            if cell.value == None:
-                cell.value = n
-                n += 1
 
-        sheet.oddFooter.left.text = КодKKS + "-MPA0001" + '\n' + Архивный
-        return book
-
-    book_mpa = mpa_write()
-    book_mpa.save(f"output/{КодKKS}-MPA0001.xlsx")
 ## Список тегов для заполения шаблона:пункт графика, Код КодKKSдокумента РД, Код КодKKSдокумента спецификации РД,
 ## Код КодKKSдокумента спецификации арматуры РД, Код КодKKSдокумента документа, Архивный номер, номер МДС, архивный номер см
     def mdb_write():
@@ -2043,7 +2095,15 @@ if __name__ == '__main__':
     valves_insulation = valves_insulation()
     mpd = mpd_preporation()
     list_of_insulation = insulation_list_prep()
+    mpa_write()
     output()
+    # # p1 = Process(target= mpa, args=(pipeline_with_insulation, ))
+    # p1 = Process(target=mpa_write)
+    # # p2 = Process(target=output, args=(mpd, ))
+    # p1.start()
+    # # p2.start()
+    # p1.join()
+    # # p2.join()
     print("--- %s seconds ---" % (time.time() - start_time))
 
 
